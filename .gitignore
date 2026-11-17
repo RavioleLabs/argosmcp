@@ -1,0 +1,14 @@
+node_modules/
+dist/
+public/
+.data/
+.env
+*.local
+coverage/
+
+.cloudflare/
+.wrangler/
+.dev.vars
+*.secrets.json
+
+build/

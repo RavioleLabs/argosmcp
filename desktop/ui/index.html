@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Argos Personal</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <aside>
+      <div class="brand">
+        <svg viewBox="0 0 40 40">
+          <path d="M6 20h10L32 7M16 20h16M16 20l16 13" />
+          <circle cx="6" cy="20" r="3" />
+          <circle cx="32" cy="7" r="3" />
+          <circle cx="32" cy="20" r="3" />
+          <circle cx="32" cy="33" r="3" /></svg
+        ><strong>argos<span>personal</span></strong>
+      </div>
+      <label class="caption" for="workspace">WORKSPACE</label
+      ><select id="workspace" aria-label="Workspace"></select>
+      <nav>
+        <button data-tab="approvals" class="active">
+          ✓ <span>Approvals</span><b id="count">0</b></button
+        ><button data-tab="connections">↔ <span>Connections</span></button
+        ><button data-tab="device">⌘ <span>This device</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <span class="dot"></span><span>Your tokens stay here</span
+        ><small>Encrypted with your OS keychain.<br />No cloud token vault.</small>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <span id="company">Your personal connector</span
+        ><span id="status" class="pill">Starting</span>
+      </header>
+      <div id="error" role="alert" hidden></div>
+      <section id="welcome" hidden>
+        <p class="eyebrow">A PRIVATE HOME FOR YOUR CONNECTIONS</p>
+        <h1>Your tools.<br />Your permission.</h1>
+        <p class="lead">
+          Connect this device to your company. Your AI uses Argos. Your credentials stay with you.
+        </p>
+        <form id="pair">
+          <label
+            >Company workspace URL<input
+              id="origin"
+              type="url"
+              required
+              placeholder="https://raviolelabs.argosnode.ai" /></label
+          ><label
+            >Device name<input id="label" required maxlength="100" placeholder="My Mac" /></label
+          ><button class="primary">Connect this device →</button>
+        </form>
+      </section>
+      <section id="pairing" hidden>
+        <p class="eyebrow">ONE LAST CHECK</p>
+        <h1>Confirm your device.</h1>
+        <p class="lead">
+          Open your workspace, sign in and compare this fingerprint before pairing.
+        </p>
+        <code id="fingerprint"></code>
+        <p>
+          <a id="pair-link" class="button primary" target="_blank" rel="noreferrer"
+            >Open workspace ↗</a
+          >
+        </p>
+        <p class="muted">Waiting for your confirmation…</p>
+      </section>
+      <section id="approvals" hidden>
+        <div class="heading">
+          <div>
+            <p class="eyebrow">PERMISSION BEFORE ACTION</p>
+            <h1>Waiting for you.</h1>
+            <p>Review the exact action. Every approval applies once.</p>
+          </div>
+          <button id="notifications">Enable notifications</button>
+        </div>
+        <div id="actions"></div>
+      </section>
+      <section id="connections" hidden>
+        <p class="eyebrow">LOCAL CREDENTIALS</p>
+        <h1>Your connections.</h1>
+        <p>Sign in directly with each service. Tokens never reach Argos or your AI.</p>
+        <div id="connection-list"></div>
+        <form id="connect" class="card">
+          <h2>Connect a tool</h2>
+          <label
+            >Service<select id="provider">
+              <option value="notion">Notion</option>
+              <option value="slack">Slack</option>
+              <option value="linear">Linear</option>
+            </select></label
+          ><label
+            >Connection name<input
+              id="connection-label"
+              value="My Notion"
+              required
+              maxlength="100" /></label
+          ><label id="client-id-label" hidden
+            >Public OAuth client ID<input
+              id="client-id"
+              maxlength="300"
+              placeholder="From your provider app settings"
+            /><small>Slack must have PKCE enabled. No client secret is needed.</small></label
+          ><button class="primary">Continue to provider ↗</button><small id="callback"></small>
+        </form>
+        <form id="memory" class="card">
+          <h2>Create an Engram context</h2>
+          <p>
+            Encrypted memory stored on this device. Your AI can save, search and forget entries
+            through Argos.
+          </p>
+          <label
+            >Context name<input
+              id="memory-label"
+              value="My memory"
+              required
+              maxlength="100" /></label
+          ><label
+            >Who can access it?<select id="memory-scope">
+              <option value="personal">Only me</option>
+              <option value="team">My team</option>
+            </select></label
+          ><label id="memory-team-label" hidden
+            >Team<select id="memory-team"></select
+            ><small
+              >Team contexts must be created by a company administrator who belongs to the team.
+              This device must stay online.</small
+            ></label
+          ><button class="primary">Create memory context</button>
+        </form>
+      </section>
+      <section id="device" hidden>
+        <p class="eyebrow">YOUR DEVICE, YOUR ACCESS</p>
+        <h1>Connected, on your terms.</h1>
+        <div class="card">
+          <h2>How it works</h2>
+          <div class="flow">Your AI <i>→</i> Argos <i>→</i> This device <i>→</i> Your tools</div>
+          <p>
+            Company rules are checked before execution. Writes also need your confirmation here.
+            Requests and results pass through your workspace.
+          </p>
+          <p>
+            Keep Argos running to execute actions. If the workspace is unavailable, actions are
+            blocked.
+          </p>
+          <p>
+            The local credential store protects saved tokens. It cannot protect against every
+            compromise of this device.
+          </p>
+          <a id="dashboard" target="_blank" rel="noreferrer">Open company dashboard ↗</a>
+        </div>
+        <button id="add-workspace">Connect another workspace</button>
+      </section>
+      <footer><span>Argos Personal</span><span>Company rules. Personal control.</span></footer>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
