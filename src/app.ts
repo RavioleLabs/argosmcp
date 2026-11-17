@@ -1,5 +1,5 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
-import { resolve } from 'node:path';
+import { dashboardAsset } from './dashboard-assets.js';
 import { z } from 'zod';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -29,6 +29,7 @@ import {
   type ToolName,
 } from './connectors.js';
 import { Gateway } from './gateway.js';
+import { ServerCustody } from './server-custody.js';
 import { Devices } from './devices.js';
 
 const name = z.string().trim().min(1).max(120);
@@ -43,16 +44,14 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
   const app = express(),
     auth = new Auth(store, settings),
     connectors = new Connectors(store, vault, settings),
+    serverCustody = new ServerCustody(store, settings),
     gateway = new Gateway(store, vault, {
-      execute: (c, t, a) => {
-        insist(
-          settings.demo && c.demo,
-          'Connect this service from the personal app. Server-held provider credentials are disabled.',
-          403,
-        );
-        return connectors.execute(c, t, a);
+      execute: (c, t, a, beforeDispatch) => {
+        if (settings.demo && c.demo) return connectors.execute(c, t, a, beforeDispatch);
+        return serverCustody.execute(c, t, a, beforeDispatch ?? (async () => {}));
       },
     });
+  connectors.server = serverCustody;
   const devices = new Devices(store, vault, gateway, workspaceURL(settings));
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -133,6 +132,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
   });
   auth.mount(app);
   devices.mount(app, auth);
+  serverCustody.mount(app, auth, connectors);
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'argosmcp' }));
   app.get('/api/session', (req, res) => {
     const userId = auth.session(req);
@@ -151,6 +151,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     res.json({
       demo: settings.demo,
       hosted: !!settings.hosted,
+      singleWorkspace: !!settings.tenant,
       selfService: !!settings.selfService,
       workspaceUrl: workspaceURL(settings),
       googleConfigured: !!(settings.env.GOOGLE_CLIENT_ID && settings.env.GOOGLE_CLIENT_SECRET),
@@ -221,6 +222,11 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
         status: c.status === 'active' && store.expires(c) <= Date.now() ? 'expired' : c.status,
         revokeStatus: c.revoke_status,
         demo: !!c.demo,
+        custody: store.get('SELECT 1 FROM server_credentials WHERE connection_id=?', c.id)
+          ? 'server'
+          : c.demo
+            ? 'demo'
+            : 'local',
         local: !!store.get('SELECT 1 FROM local_connections WHERE connection_id=?', c.id),
         policies: Object.entries(catalog)
           .filter(([, t]) => t.provider === c.provider)
@@ -264,6 +270,14 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       org,
       role,
       connections,
+      serverCustody: {
+        available: serverCustody.available,
+        enabled: serverCustody.enabled(p.orgId),
+        providers: ['slack', 'notion', 'linear'].map((provider) => ({
+          provider,
+          configured: serverCustody.configured(provider),
+        })),
+      },
       teams,
       grants,
       devices: store.all(
@@ -339,18 +353,6 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       );
     else insist(!teamId, 'teamId only applies to team contexts', 400);
   }
-  app.post('/api/org/:orgId/connect/:provider', (req, res) => {
-    auth.principal(req);
-    res.status(410).json({
-      error:
-        'Connect your tools in the Argos personal app. Provider tokens never pass through this server.',
-    });
-  });
-  app.get('/oauth/callback/:provider', (_req, res) =>
-    res
-      .status(410)
-      .json({ error: 'Server OAuth callbacks are disabled. Reconnect from the personal app.' }),
-  );
   app.post('/api/org/:orgId/engram', (req, res) => {
     auth.principal(req);
     res.status(410).json({
@@ -828,9 +830,14 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     await transport.handleRequest(req, res, req.body);
   });
   if (!settings.hosted) {
-    app.use(express.static(resolve('public')));
-    app.get('/', (_req, res) => res.sendFile(resolve('public/index.html')));
+    app.get(['/', '/dashboard-assets/*path'], async (req, res) => {
+      const asset = await dashboardAsset(req.path, settings.env);
+      res.status(asset.status);
+      asset.headers.forEach((value, key) => res.setHeader(key, value));
+      res.send(Buffer.from(await asset.arrayBuffer()));
+    });
   }
+
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (res.headersSent) return;
@@ -842,7 +849,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       error: err instanceof Fault ? err.message : 'Request failed. No credentials were exposed.',
     });
   });
-  return { app, auth, connectors, gateway, devices };
+  return { app, auth, connectors, gateway, devices, serverCustody };
 }
 export const DEMO_USER = '00000000-0000-4000-8000-000000000001';
 export const DEMO_ORG = '00000000-0000-4000-8000-000000000002';

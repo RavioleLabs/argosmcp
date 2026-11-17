@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,17 +9,23 @@ import { createLocalApp } from './app.js';
 
 process.umask(0o077);
 try {
+  let assets =
+    process.env.ARGOS_LOCAL_UI_DIR ?? fileURLToPath(new URL('../../desktop/ui', import.meta.url));
+  if (!existsSync(resolve(assets, 'index.html'))) {
+    const pointer = resolve('.data/personal-ui/current.json');
+    if (!existsSync(pointer))
+      throw new Error('Install the interface with npm run local:setup first.');
+    const { version } = JSON.parse(readFileSync(pointer, 'utf8'));
+    if (!/^[a-f0-9]{16}$/.test(version)) throw new Error('Invalid personal interface release');
+    assets = resolve('.data/personal-ui', version);
+  }
   const storage = new LocalStorage(
     resolve(process.env.ARGOS_LOCAL_DATA ?? resolve(homedir(), '.argos-personal')),
   );
   const runtime = new LocalRuntime(storage),
     port = Number(process.env.ARGOS_LOCAL_PORT ?? 4217),
     origin = `http://localhost:${port}`;
-  const { app, url } = createLocalApp(
-    runtime,
-    origin,
-    fileURLToPath(new URL('../../desktop/ui', import.meta.url)),
-  );
+  const { app, url } = createLocalApp(runtime, origin, assets);
   const server = app.listen(port, '127.0.0.1', () => {
     if (process.env.ARGOS_DESKTOP === '1') console.log(JSON.stringify({ url }));
     else {
@@ -69,7 +76,7 @@ try {
     });
 } catch {
   console.error(
-    'Argos could not unlock its OS credential store. Unlock your keychain and retry. No plaintext fallback is used.',
+    'Argos could not start. Install its interface with npm run local:setup and unlock your OS credential store. No plaintext fallback is used.',
   );
   process.exitCode = 1;
 }

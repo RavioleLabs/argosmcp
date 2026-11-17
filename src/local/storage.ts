@@ -64,6 +64,7 @@ export class LocalStorage {
         entry.setPassword(key.toString('base64'));
       }
     }
+    insist(key, 'OS credential key unavailable', 503);
     this.vault = new Vault({ v1: key });
   }
   all(): Profile[] {

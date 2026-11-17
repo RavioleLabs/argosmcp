@@ -4,7 +4,7 @@ Independent project at ~/raviolelabs/argosmcp. Do not move it into clawbots or m
 
 Product decisions and current delivery boundaries are in docs/CONTEXT.md, README.md and SECURITY.md. Keep them accurate.
 
-Provider tokens belong on the personal device. Do not restore hosted provider OAuth or expose raw provider credentials through the UI, MCP, logs or test artifacts. Cloud login to Argos is separate.
+Local provider-token custody is the default recommendation. Emeric explicitly authorized optional server custody on 2026-11-18: require deployment enablement, administrator opt-in and explicit user consent, preserving current local connections. Never expose raw credentials through UI, MCP, logs or test artifacts. Cloud login is separate. Dashboard/native presentation source belongs only in the private ../argos-dashboard repository; this repository publishes the backend/runtime only.
 
 UI language is English. Keep the light, quiet Apple-inspired interface and AI-to-tools branch logo.
 

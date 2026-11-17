@@ -19,6 +19,14 @@ export default defineConfig({
       miniflare: {
         bindings: {
           ARGOS_TENANTS_JSON: JSON.stringify(tenants),
+          ARGOS_SERVER_CUSTODY: '1',
+          ARGOS_PROVIDER_VAULT_KEYRING: JSON.stringify({
+            v1: Buffer.alloc(32, 8).toString('base64'),
+          }),
+          ARGOS_DASHBOARD_URL: 'https://dashboard.example.test',
+          ARGOS_DASHBOARD_VERSION: '',
+          SLACK_PUBLIC_CLIENT_ID: 'fixture-slack-public',
+          LINEAR_PUBLIC_CLIENT_ID: '',
           ARGOS_VAULT_KEYRING: JSON.stringify({ v1: Buffer.alloc(32, 7).toString('base64') }),
           GOOGLE_CLIENT_ID: 'google-test-client',
           GOOGLE_CLIENT_SECRET: 'google-test-secret',

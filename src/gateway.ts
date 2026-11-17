@@ -281,7 +281,22 @@ export class Gateway {
         r.id,
       ).changes;
       if (!acquired) return;
-      const output = await this.connectors.execute(c, r.tool as ToolName, args);
+      const output = await this.connectors.execute(c, r.tool as ToolName, args, async () => {
+        const current = this.store.get<Invocation>('SELECT * FROM invocations WHERE id=?', r.id)!;
+        insist(
+          current.status === 'executing' &&
+            current.expires_at > Date.now() &&
+            current.revision === this.store.org(p.orgId).revision,
+          'Execution authorization changed',
+        );
+        this.authorize(p, c.id, r.tool);
+        if (this.policy(c, r.tool, p) === 'approve')
+          insist(
+            current.approver_id &&
+              this.canApprove({ orgId: p.orgId, userId: current.approver_id }, c),
+            'Approval no longer valid',
+          );
+      });
       this.store.run(
         "UPDATE invocations SET status='completed',result=? WHERE id=?",
         this.vault.seal(output, `${r.org_id}:result:${r.id}`),

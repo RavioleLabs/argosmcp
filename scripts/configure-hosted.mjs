@@ -39,6 +39,12 @@ tenants[originArg] ??= {
 };
 secrets.ARGOS_TENANTS_JSON = JSON.stringify(tenants);
 secrets.ARGOS_VAULT_KEYRING ??= JSON.stringify({ v1: randomBytes(32).toString('base64') });
+secrets.ARGOS_DASHBOARD_URL ??= 'https://argos-dashboard.leraviole.workers.dev';
+secrets.ARGOS_DASHBOARD_VERSION ??= '';
+secrets.ARGOS_SERVER_CUSTODY ??= '1';
+secrets.ARGOS_PROVIDER_VAULT_KEYRING ??= JSON.stringify({ v1: randomBytes(32).toString('base64') });
+secrets.SLACK_PUBLIC_CLIENT_ID ??= '';
+secrets.LINEAR_PUBLIC_CLIENT_ID ??= '';
 secrets.GOOGLE_CLIENT_ID = google.client_id;
 secrets.GOOGLE_CLIENT_SECRET = google.client_secret;
 writeFileSync(path, JSON.stringify(secrets, null, 2), { mode: 0o600 });

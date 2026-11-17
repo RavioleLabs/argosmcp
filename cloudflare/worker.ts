@@ -12,6 +12,7 @@ import {
   type Tenant,
   type Settings,
 } from '../src/foundation.js';
+import { dashboardAsset } from '../src/dashboard-assets.js';
 import { createApp } from '../src/app.js';
 import { trustedBrowserUser } from '../src/auth.js';
 import {
@@ -420,31 +421,27 @@ export default {
       }
       const route = workspaceRoute(url.pathname);
       if (
-        request.method === 'GET' &&
+        ['GET', 'HEAD'].includes(request.method) &&
         (url.pathname === '/' ||
-          url.pathname.startsWith('/assets/') ||
+          url.pathname.startsWith('/dashboard-assets/') ||
           (route && route.internalPath === '/'))
       ) {
-        const assetRequest = route
-          ? new Request(url.origin + '/', { headers: request.headers })
-          : request;
-        const response = await env.ASSETS.fetch(assetRequest);
-        const headers = new Headers(response.headers);
-        headers.set('X-Content-Type-Options', 'nosniff');
-        headers.set('X-Frame-Options', 'DENY');
-        headers.set('Referrer-Policy', 'no-referrer');
-        headers.set(
-          'Content-Security-Policy',
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        return await dashboardAsset(
+          route ? '/' : url.pathname,
+          Object.fromEntries(
+            Object.entries(env).filter(
+              (entry): entry is [string, string] => typeof entry[1] === 'string',
+            ),
+          ),
         );
-        if (url.pathname === '/' || route) headers.set('Cache-Control', 'no-store');
-        return new Response(response.body, { status: response.status, headers });
       }
+
       if (route) {
         if (route.internalPath.startsWith('/auth/'))
           return privateJSON({ error: 'Use platform sign-in' }, 404);
         // Native devices and bearer-authenticated MCP endpoints do not inherit browser identity.
         const browser =
+          route.internalPath.startsWith('/oauth/callback/') ||
           route.internalPath === '/api/session' ||
           (route.internalPath.startsWith('/api/') && !route.internalPath.startsWith('/api/local/'));
         const identity = browser

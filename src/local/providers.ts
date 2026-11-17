@@ -15,6 +15,7 @@ import { opaque, insist } from '../foundation.js';
 import type { LocalConnection } from './storage.js';
 
 export interface OAuthAttempt {
+  clientName?: string;
   profileId: string;
   provider: Exclude<LocalConnection['provider'], 'engram'>;
   connectionId: string;
@@ -58,7 +59,7 @@ export async function authorizeURL(a: OAuthAttempt) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_name: 'Argos Personal Connector',
+        client_name: a.clientName ?? 'Argos Personal Connector',
         redirect_uris: [a.redirect],
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
@@ -150,7 +151,7 @@ export async function revoke(c: LocalConnection): Promise<'confirmed' | 'manual_
         const r = await fetch(providerConfig.slack.revoke, {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + token },
-          redirect: 'error',
+          redirect: 'manual',
           signal: AbortSignal.timeout(15000),
         });
         insist(r.ok, 'Revocation failed');
@@ -200,7 +201,7 @@ export async function executeLocal(
   const transport = new StreamableHTTPClientTransport(new URL('https://mcp.notion.com/mcp'), {
     requestInit: {
       headers: { Authorization: 'Bearer ' + c.credentials.access_token },
-      redirect: 'error',
+      redirect: 'manual',
     },
     reconnectionOptions: {
       maxRetries: 0,

@@ -2,12 +2,14 @@
 
 Company policy for AI tools, with provider credentials kept on the user's device.
 
+Argos Personal exists to avoid concentrating every user’s provider OAuth tokens in a central server vault. It stores credentials on the user’s computer and executes tools after ArgosMCP authorizes the action. Company policy and local approvals still apply; requests and results transit Argos. Optional server-managed token storage requires operator configuration, company administrator approval and explicit user consent. Its operator can decrypt the stored tokens. Local storage is the recommended model and requires the user’s computer to remain online.
+
 ```text
 Claude / Codex / Gemini → ArgosMCP → Argos Personal → Slack / Notion / Linear
                        ←          ←                ← result
 ```
 
-ArgosMCP is a remote MCP server and company dashboard. Argos Personal is a local connector with a macOS menu-bar application. The connector makes outbound authenticated requests; it does not expose a public listener. Its temporary OAuth callback and local UI listen on loopback only.
+ArgosMCP is an open-source remote MCP and policy backend. Its dashboard is a separately maintained hosted service. Argos Personal is a local connector with a macOS menu-bar application. The connector makes outbound authenticated requests; it does not expose a public listener. Its temporary OAuth callback and local UI listen on loopback only.
 
 This is an independent project at `~/raviolelabs/argosmcp`. It is not part of clawbots.
 
@@ -30,7 +32,7 @@ This is an independent project at `~/raviolelabs/argosmcp`. It is not part of cl
 ```sh
 npm install
 npm run build
-npm run demo
+ARGOS_DASHBOARD_URL=https://argos-dashboard.leraviole.workers.dev npm run demo
 ```
 
 The demo dashboard runs at `http://127.0.0.1:4180`. Its sample tool connections are simulations. Do not deploy demo mode publicly.
@@ -38,17 +40,11 @@ The demo dashboard runs at `http://127.0.0.1:4180`. Its sample tool connections 
 In a second terminal:
 
 ```sh
+npm run local:setup
 npm run local
 ```
 
-On macOS, build and open the desktop app instead:
-
-```sh
-npm run build:desktop
-open "build/Argos Personal.app"
-```
-
-The app includes the Node runtime and production dependencies for the Mac on which it is built. It has a **local ad-hoc signature**, not an Apple Developer ID signature or notarization. Windows/Linux can run the connector with Node; native installers for them are not included.
+The presentation bundle is downloaded explicitly by `local:setup`; it is not updated automatically. The backend/local runtime remains MIT. Use the Mac app download below for the packaged experience. Windows uses the same runtime with Windows Credential Manager; install a supported Node version and use the commands above. A native Windows installer is not included.
 
 ### Guided setup and Mac download
 
@@ -77,9 +73,9 @@ No real provider authorization has been completed as part of automated tests. Te
 
 ## Cloudflare
 
-`cloudflare.config.ts` defines the Worker and one SQLite Durable Object per company. The server now refuses provider OAuth callbacks and cannot execute live provider connections. Google sign-in is separate from tool OAuth.
+`cloudflare.config.ts` defines the Worker and one SQLite Durable Object per company. Local connections dispatch to the personal device. Server connections use the dedicated provider vault only after all three opt-ins. Google sign-in is separate from tool OAuth.
 
-Required server secrets: `ARGOS_TENANTS_JSON`, `ARGOS_VAULT_KEYRING` (encrypts action arguments/results, not provider tokens), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+Required identity/data configuration: `ARGOS_TENANTS_JSON`, `ARGOS_VAULT_KEYRING` (action data), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. The Cloudflare deployment also declares dashboard/custody/provider-client bindings; the configuration script writes defaults. `ARGOS_PROVIDER_VAULT_KEYRING` encrypts server OAuth tokens separately. `ARGOS_SERVER_CUSTODY=1` makes the option available but does not enable it for any company.
 
 ```json
 {
@@ -107,7 +103,6 @@ The Worker is deployed at `https://argosmcp.leraviole.workers.dev` with Google O
 npm run check
 npm test
 npm run test:cloudflare
-npm run build:desktop
 ```
 
 See [SECURITY.md](SECURITY.md) for the trust model and remaining release requirements. Touch ID/passkey gating and hardware attestation are not implemented.
@@ -131,4 +126,10 @@ This preserves existing workspace IDs and encryption keys and stores the server 
 
 ## Open source
 
-MIT licensed. The hosted offering runs the same policy and local-custody model. Native macOS release signing and notarization require the operator's Apple Developer credentials. CI runs type checks, isolation tests, the Workers runtime tests, a cloud build and the production dependency audit.
+The backend and local runtime are MIT licensed. New dashboard and native presentation development is maintained separately in a private repository and delivered as a service/binary bundle. Previously published MIT code retains its license and remains in Git history. The hosted offering runs the same policy backend. Native macOS release signing and notarization require the operator's Apple Developer credentials. CI runs type checks, isolation tests, the Workers runtime tests, a cloud build and the production dependency audit.
+
+## Self-hosting and the dashboard service
+
+See [SELF_HOSTING.md](docs/SELF_HOSTING.md) for Docker/Compose, Google setup, per-company isolation, controlled dashboard updates and optional server custody. Each Node installation hosts one company in its own persistent database. The hosted dashboard is delivered at your backend origin; login and API data stay on that backend. The dashboard publisher is a trusted code supplier and can be pinned to a version.
+
+Server connections support Notion, Slack and Linear after their provider setup; Engram contexts currently remain on personal devices. In **Security**, administrators may allow server-managed connections. Every user must then consent to server storage for each connection. This does not transfer existing local tokens or add local confirmation to server-executed actions.

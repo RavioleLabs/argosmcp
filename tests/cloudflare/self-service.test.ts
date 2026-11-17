@@ -9,14 +9,14 @@ import { validOrigin } from '../../src/local/remote.js';
 
 const origin = 'https://alpha.example.test';
 const rootId = '00000000-0000-4000-8000-000000000101';
-async function accounts() {
+async function accounts(suffix = '') {
   const a = opaque(),
     b = opaque();
   await runInDurableObject(env.WORKSPACES.getByName(rootId), (_instance, state) => {
     const store = new Store(new DurableDatabase(state.storage));
     for (const [email, token] of [
-      ['creator@example.test', a],
-      ['second@example.test', b],
+      ['creator' + suffix + '@example.test', a],
+      ['second' + suffix + '@example.test', b],
     ]) {
       const uid = id();
       store.run('INSERT INTO users VALUES(?,?,?,?)', uid, email, email, email);
@@ -313,4 +313,58 @@ it('preserves safe Google return paths and rejects redirect escapes', async () =
   }
   expect(() => validOrigin(origin + '/w/not-a-workspace')).toThrow();
   expect(() => validOrigin(origin + '/w/' + id() + '?override=1')).toThrow();
+});
+it('binds server OAuth callbacks and encrypted credentials to their company and signed-in account', async () => {
+  const { a, b } = await accounts('-server');
+  const company = await json(
+    await call('/api/workspaces', a, { name: 'Server custody', requestId: id() }),
+    201,
+  );
+  const path = '/w/' + company.id;
+  const base = path + '/api/org/' + company.id;
+  await json(
+    await call(base + '/server-custody', a, { enabled: true, acknowledgeRisk: true }, 'PUT'),
+  );
+  const started = await call(base + '/connect/slack', a, {
+    label: 'Slack on server',
+    scope: 'personal',
+    acknowledgeServerCustody: true,
+  });
+  const binding = started.headers.get('set-cookie')!;
+  expect(binding).toContain('Path=' + path + '/oauth/callback/slack');
+  const url = new URL((await json(started)).url);
+  expect(url.searchParams.get('redirect_uri')).toBe(origin + path + '/oauth/callback/slack');
+  const callback =
+    path + '/oauth/callback/slack?state=' + url.searchParams.get('state') + '&code=fixture-code';
+  const { vi } = await import('vitest');
+  const provider = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    expect(String(input)).toBe('https://slack.com/api/oauth.v2.access');
+    return Response.json({
+      ok: true,
+      authed_user: {
+        access_token: 'fixture-workerd-token',
+        refresh_token: 'fixture-workerd-refresh',
+        expires_in: 3600,
+      },
+    });
+  });
+  try {
+    const cookie = binding.split(';')[0];
+    await json(
+      await call(callback, b, undefined, 'GET', { Cookie: 'argos_session=' + b + '; ' + cookie }),
+      403,
+    );
+    expect(provider).not.toHaveBeenCalled();
+    const completed = await call(callback, a, undefined, 'GET', {
+      Cookie: 'argos_session=' + a + '; ' + cookie,
+    });
+    expect(completed.status, await completed.text()).toBe(302);
+    expect(completed.headers.get('location')).toBe(company.url + '/?view=connections');
+    const state = await json(await call(base + '/state', a));
+    expect(state.connections).toMatchObject([{ custody: 'server', status: 'active' }]);
+    expect(JSON.stringify(state)).not.toContain('fixture-workerd-token');
+    await json(await call(base + '/state', b), 403);
+  } finally {
+    provider.mockRestore();
+  }
 });

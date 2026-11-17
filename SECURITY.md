@@ -2,7 +2,7 @@
 
 ## The boundary
 
-The hosted service does not receive provider access tokens, refresh tokens or local device private keys in normal operation. The local connector obtains OAuth credentials directly from the provider and uses them at fixed provider endpoints. Cloud login for Argos itself is a separate Google OIDC flow.
+For local-custody connections, the hosted service does not receive provider access tokens, refresh tokens or local device private keys through the credential flow. The local connector obtains OAuth credentials directly from the provider and uses them at fixed provider endpoints. Cloud login for Argos itself is a separate Google OIDC flow.
 
 The hosted service necessarily sees the approved tool arguments and returned results. Encryption at rest is not a claim that the operator cannot read them. Result redaction covers known credentials, not all possible secrets inside user documents.
 
@@ -14,7 +14,7 @@ A random AES wrapping key is generated once and stored using the OS credential s
 
 Cloud synchronization is not requested. The current implementation uses the OS keyring binding; it does not claim Secure Enclave execution, biometric-gated key access, zero knowledge, hardware attestation, or protection against local administrator/malware access. An unlocked connector can use its credentials. Do not advertise iCloud storage or passkey-protected decryption.
 
-All writes require local confirmation even if the dashboard already approved them. Automatic reads require explicit per-connection local delegation. A compromised Argos server can request actions, access transit results, deny service and abuse any reads that the user delegated. It cannot silently expand the official connector's write delegation. A malicious software update could compromise that boundary; production releases require an independently reviewed update process.
+All local-connector writes require local confirmation even if the dashboard already approved them. Automatic reads require explicit per-connection local delegation. A compromised Argos server can request actions, access transit results, deny service and abuse any reads that the user delegated. It cannot silently expand the official connector's write delegation. A malicious software update could compromise that boundary; production releases require an independently reviewed update process.
 
 ## Server controls
 
@@ -52,3 +52,11 @@ Engram records are encrypted with context-bound associated data. The context bin
 As of 2026-11-17, the production dependency audit reports zero known advisories. The development toolchain has the unpatched picomatch ReDoS advisory GHSA-fc5q-39xc-vjpf, propagated through Vite/Vitest. It consumes repository-controlled glob patterns, not tool arguments; development servers must stay local. The latest published picomatch is still affected. Do not downgrade the Cloudflare toolchain to incompatible versions just to suppress the audit. Recheck before releases.
 
 Cloudflare automatic tracing includes full request URLs, so trace sampling is explicitly zero and invocation logs are disabled. Application failure logs omit requests with query strings. Company decision auditing remains enabled in the database. Review any new telemetry exporter before enabling it on OAuth routes.
+
+## Optional server custody and hosted dashboard
+
+Server credentials use a dedicated AES vault keyring with workspace/company/connection-associated data. Deployment enablement, administrator acknowledgment and explicit user consent are all required. Encrypted OAuth state is bound to the signed-in account and a scoped HttpOnly browser cookie, consumed once and checked again after token exchange. Cancellation or membership changes during exchange trigger token revocation. Token refresh and revocation are serialized per connection; current policy and membership are rechecked immediately before provider dispatch.
+
+The operator can decrypt server-held tokens. This optional mode concentrates exposure and does not provide local confirmation. Company disabling/expiry blocks new dispatch immediately, with upstream revocation attempted and failures retained for retry. Removing vault keys prevents use but cannot revoke provider access; retain keys until revocation is confirmed, and manually revoke upstream when needed.
+
+Self-hosted Node deployments require a separate installation/data volume/company identity per tenant. The hosted dashboard is served through the backend's origin from a trusted, optionally version-pinned publisher. Only public static files are fetched; no incoming session cookies, API bodies, provider tokens or tool results are forwarded to the publisher. Nevertheless its JavaScript runs with the user's dashboard privileges: a compromised publisher/update can compromise dashboard sessions. Pinning controls update timing, not publisher trust. Browser/API origin remains the self-hosted backend; there is no generic relay or permissive credentialed CORS.

@@ -165,6 +165,7 @@ export async function requestJSON(
   return data;
 }
 export class Connectors {
+  server?: { revoke(connectionId: string): Promise<void> };
   private refreshing = new Map<string, Promise<Credentials>>();
   constructor(
     public store: Store,
@@ -245,7 +246,12 @@ export class Connectors {
     this.refreshing.set(c.id, promise);
     return promise;
   }
-  async execute(c: Connection, tool: ToolName, args: Record<string, any>): Promise<unknown> {
+  async execute(
+    c: Connection,
+    tool: ToolName,
+    args: Record<string, any>,
+    beforeDispatch?: () => Promise<void>,
+  ): Promise<unknown> {
     this.store.live(c);
     if (c.demo) {
       insist(this.settings.demo, 'Demo connector disabled');
@@ -273,6 +279,7 @@ export class Connectors {
     const { access_token } = await this.credentials(c);
     const current = this.store.get<Connection>('SELECT * FROM connections WHERE id=?', c.id)!;
     this.store.live(current);
+    await beforeDispatch?.();
     return executeProvider(c.provider, access_token, tool, args);
   }
   private async engram(c: Connection, tool: ToolName, args: Record<string, any>) {
@@ -329,6 +336,10 @@ export class Connectors {
     );
   }
   async revokeUpstream(connectionId: string) {
+    if (this.store.get('SELECT 1 FROM server_credentials WHERE connection_id=?', connectionId)) {
+      await this.server?.revoke(connectionId);
+      return;
+    }
     try {
       await this.refreshing.get(connectionId);
     } catch {
@@ -391,6 +402,10 @@ export class Connectors {
     }
   }
   async sweep() {
+    this.store.run(
+      "UPDATE connections SET status='revoked',revoke_status='pending' WHERE status='pending' AND expires_at<=?",
+      Date.now(),
+    );
     const rows = this.store.all<Connection>(
       "SELECT * FROM connections WHERE status='active' OR revoke_status IN ('pending','retry_required')",
     );

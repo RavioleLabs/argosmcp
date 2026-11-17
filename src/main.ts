@@ -30,6 +30,7 @@ insist(
 );
 const settings: Settings = {
   origin,
+  tenant: demo ? undefined : JSON.parse(process.env.ARGOS_TENANTS_JSON ?? '{}')[origin],
   demo,
   dataDir: resolve(process.env.ARGOS_DATA_DIR ?? (demo ? '.data/demo' : '.data/live')),
   env: process.env,
@@ -52,6 +53,11 @@ insist(
 insist(
   new Set(settings.targets.map((t) => new URL(t.url).href)).size === settings.targets.length,
   'Each Engram context requires a distinct upstream endpoint',
+  500,
+);
+insist(
+  demo || settings.tenant,
+  'Configure a dedicated company UUID and owner for this backend in ARGOS_TENANTS_JSON',
   500,
 );
 const store = new Store(resolve(settings.dataDir, 'argosmcp.sqlite')),

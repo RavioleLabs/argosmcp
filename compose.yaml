@@ -1,0 +1,18 @@
+services:
+  argos:
+    build: .
+    restart: unless-stopped
+    env_file: .data/self-host.env
+    ports:
+      - "127.0.0.1:4180:4180"
+    volumes:
+      - argos-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  argos-data:

@@ -262,10 +262,15 @@ describe('Mandatory tool policy and exact approvals', () => {
     );
     await gateway.decide(owner, r.id, true);
     await expect(gateway.decide(owner, r.id, true)).rejects.toThrow();
-    expect(execute).toHaveBeenCalledExactlyOnceWith(shared, 'slack_send_message', {
-      channel: 'C1',
-      text: 'Hello',
-    });
+    expect(execute).toHaveBeenCalledExactlyOnceWith(
+      shared,
+      'slack_send_message',
+      {
+        channel: 'C1',
+        text: 'Hello',
+      },
+      expect.any(Function),
+    );
   });
   it('blocks approval after encrypted arguments are replaced', async () => {
     const r = await gateway.invoke(
