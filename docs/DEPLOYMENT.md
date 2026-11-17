@@ -1,6 +1,6 @@
 # Hosted deployment
 
-The repository is public at https://github.com/RavioleLabs/argosmcp. The Worker is deployed at https://argosmcp.leraviole.workers.dev in setup-only mode. Its landing page is public; unconfigured workspace APIs return 503. GitHub Actions verifies the source on every push.
+The repository is public at https://github.com/RavioleLabs/argosmcp. The Worker is deployed at https://argosmcp.leraviole.workers.dev with the isolated RavioleLabs preview workspace and Google OAuth secrets configured. Its session endpoint reports `googleConfigured: true`; unauthenticated MCP calls return 401. The real login callback exposed an unsupported fetch redirect mode in workerd. The corrected implementation uses manual redirects and rejects 3xx responses before reading the body. Final browser login verification is pending. GitHub Actions verifies the source on every push.
 
 ## Company provisioning
 
@@ -8,12 +8,12 @@ The RavioleLabs company configuration has been prepared locally for `https://rav
 
 1. Google Cloud is activated and the dedicated `argosmcp-raviolelabs` project and ArgosMCP consent profile have been created. The audience is External, in Testing mode.
 2. The ArgosMCP Google OAuth **Web application** has been created with both `https://raviolelabs.argosnode.ai/auth/google/callback` and `https://argosmcp.leraviole.workers.dev/auth/google/callback` as authorized redirects. Argos login requests only `openid email profile`.
-3. **Pending:** save the Google client JSON locally in the ignored `.data` directory, then run `scripts/configure-hosted.mjs` as described in README. This preserves the keyring and company UUID. Never paste the secret into chat or commit it.
+3. The Google client configuration was saved locally with mode 600, imported with `scripts/configure-hosted.mjs`, and deployed as Worker secrets. The existing keyring and company UUIDs were preserved. Never paste the secret into chat or commit it.
 4. Complete the DNS migration below, then bind the workspace hostname as a Worker custom domain.
 5. Deploy with the secrets file, without `ARGOS_SETUP_ONLY=1`. Verify sign-in with the designated owner before inviting members.
 6. Pair Argos Personal, compare fingerprints, create an agent grant, and test an Engram context. Real provider connections require separate local consent.
 
-The ignored configuration also contains an isolated RavioleLabs preview workspace at the workers.dev origin, with a **different company UUID**. This allows testing Google login before the production DNS migration. Neither workspace is active until the complete secrets are deployed. Do not reuse the preview UUID for production.
+The ignored configuration also contains an isolated RavioleLabs preview workspace at the workers.dev origin, with a **different company UUID**. This allows testing Google login before the production DNS migration. The preview configuration is deployed. The production hostname still needs its DNS/custom-domain binding. Do not reuse the preview UUID for production.
 
 ## DNS migration
 

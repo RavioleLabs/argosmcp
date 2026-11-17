@@ -20,8 +20,8 @@ export default defineConfig({
         bindings: {
           ARGOS_TENANTS_JSON: JSON.stringify(tenants),
           ARGOS_VAULT_KEYRING: JSON.stringify({ v1: Buffer.alloc(32, 7).toString('base64') }),
-          GOOGLE_CLIENT_ID: '',
-          GOOGLE_CLIENT_SECRET: '',
+          GOOGLE_CLIENT_ID: 'google-test-client',
+          GOOGLE_CLIENT_SECRET: 'google-test-secret',
           SLACK_CLIENT_ID: '',
           SLACK_CLIENT_SECRET: '',
           NOTION_CLIENT_ID: '',

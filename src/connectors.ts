@@ -129,9 +129,14 @@ export async function requestJSON(
 ): Promise<any> {
   const response = await fetch(url, {
     ...init,
-    redirect: 'error',
+    // Workers supports manual/follow only. Never forward credentials on redirects.
+    redirect: 'manual',
     signal: AbortSignal.timeout(20_000),
   });
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel();
+    throw new Fault(502, 'Provider redirects are not allowed');
+  }
   const reader = response.body?.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
