@@ -2128,3 +2128,44 @@ h1 {
     padding: 24px;
   }
 }
+
+.workspace-directory {
+  margin: 0 0 32px;
+}
+.workspace-directory h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+.workspace-directory > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.workspace-card {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 20px;
+  background: white;
+  border: 1px solid #e5e9f0;
+  border-radius: 18px;
+  color: inherit;
+  text-decoration: none;
+}
+.workspace-card:hover {
+  border-color: #246bfe;
+}
+.workspace-card > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.workspace-card strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.workspace-card small {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+}

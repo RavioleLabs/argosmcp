@@ -5,12 +5,16 @@ import type { Profile } from './storage.js';
 export function validOrigin(value: string) {
   const u = new URL(value);
   insist(
-    u.origin === value &&
+    (u.origin === value ||
+      (u.origin + u.pathname === value &&
+        /^\/w\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(u.pathname))) &&
+      !u.search &&
+      !u.hash &&
       !u.username &&
       !u.password &&
       (u.protocol === 'https:' ||
         (u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname))),
-    'Use your workspace HTTPS origin (or localhost for development)',
+    'Use your workspace HTTPS URL (or localhost for development)',
     400,
   );
   return value;

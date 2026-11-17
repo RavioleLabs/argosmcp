@@ -23,7 +23,7 @@ Track actual deployment, OAuth setup, provider integration checks, isolation tes
 
 ## Domain decision
 
-Emeric owns `argosnode.ai`. ArgosMCP is the product; RavioleLabs is only his customer workspace, not the platform-wide tenant. Plan one canonical origin per company, starting with `raviolelabs.argosnode.ai`; other companies get their own workspace subdomain. DNS access and OAuth client registration still require verification.
+Emeric owns `argosnode.ai`. ArgosMCP is the product; RavioleLabs is only his customer workspace, not the platform-wide tenant. Self-service companies use independent `/w/<UUID>` URLs on the configured platform origin, with one database per company and a private account directory. This removes the need to provision DNS for every customer. Existing reserved root workspaces remain compatible. `raviolelabs.argosnode.ai` is prepared but its DNS migration is pending; Google login currently works at the workers.dev entry point. Company separation is enforced in server authorization and storage; path routing does not create separate browser origins.
 
 ## Personal connector — accepted security model
 
@@ -38,3 +38,7 @@ Emeric owns `argosnode.ai`. ArgosMCP is the product; RavioleLabs is only his cus
 ## Built-in local memory backend
 
 The personal connector now includes encrypted personal/team memory with explicit remember/recall/forget tools and BM25 retrieval. It is separate from the existing Engram repository. Team requests route to the hosting device; both requester membership and host access are checked at dispatch. No automatic conversation capture, embeddings, or off-device memory replication is claimed.
+
+## Self-service onboarding — 2026-11-18
+
+A new Google account must be able to create its own company without an invitation or operator intervention. Creating a company establishes its owner; joining an existing company requires an invitation. Users can belong to and switch between several companies. RavioleLabs is one customer workspace, never an implicit membership granted to all users.

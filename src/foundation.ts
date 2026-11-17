@@ -94,8 +94,12 @@ export interface Tenant {
   id: string;
   name: string;
   ownerEmail: string;
+  ownerSub?: string;
 }
 export interface Settings {
+  basePath?: string;
+  platformSession?: boolean;
+  selfService?: boolean;
   hosted?: boolean;
   tenant?: Tenant;
   origin: string;
@@ -107,6 +111,8 @@ export interface Settings {
 
 // Each value has its own data key. Associated data binds ciphertext to its tenant and record.
 // Production wrapping keys are supplied by a mounted secret, never stored in the database.
+export const workspaceURL = (settings: Settings) => settings.origin + (settings.basePath ?? '');
+
 export class Vault {
   constructor(
     private keys: Record<string, Buffer>,

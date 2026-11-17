@@ -18,6 +18,7 @@ import type {
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import {
   Store,
+  workspaceURL,
   insist,
   hash,
   opaque,
@@ -39,6 +40,9 @@ export const cookies = (req: Request) =>
         return [s.slice(0, i).trim(), s.slice(i + 1)];
       }),
   );
+// Set only on the request-owned Node server by a trusted Worker RPC. Never read from HTTP headers.
+export const trustedBrowserUser = Symbol('argos.browser.user');
+
 export class Auth implements OAuthServerProvider {
   readonly audience: string;
   readonly clientsStore;
@@ -46,7 +50,7 @@ export class Auth implements OAuthServerProvider {
     public store: Store,
     public settings: Settings,
   ) {
-    this.audience = settings.origin + '/mcp';
+    this.audience = workspaceURL(settings) + '/mcp';
     this.clientsStore = {
       getClient: (clientId: string) => {
         const r = store.get<{ payload: string }>(
@@ -102,6 +106,8 @@ export class Auth implements OAuthServerProvider {
     );
   }
   session(req: Request): string | undefined {
+    if (this.settings.platformSession)
+      return (req as Request & { [trustedBrowserUser]?: string })[trustedBrowserUser];
     const cookie = cookies(req).argos_session;
     if (!cookie) return;
     return this.store.get<{ user_id: string }>(
@@ -134,9 +140,14 @@ export class Auth implements OAuthServerProvider {
   createOrg(userId: string, name: string) {
     const orgId = this.settings.tenant?.id ?? id();
     if (this.settings.tenant) {
-      const user = this.store.get<{ email: string }>('SELECT email FROM users WHERE id=?', userId);
+      const user = this.store.get<{ email: string; google_sub: string }>(
+        'SELECT email,google_sub FROM users WHERE id=?',
+        userId,
+      );
       insist(
-        user?.email.toLowerCase() === this.settings.tenant.ownerEmail.toLowerCase(),
+        this.settings.tenant.ownerSub
+          ? user?.google_sub === this.settings.tenant.ownerSub
+          : user?.email.toLowerCase() === this.settings.tenant.ownerEmail.toLowerCase(),
         'Only the designated owner may initialize this workspace',
       );
     }
@@ -161,10 +172,27 @@ export class Auth implements OAuthServerProvider {
         'Google OAuth is not configured yet',
         503,
       );
+      const returnTo = typeof req.query.return_to === 'string' ? req.query.return_to : '/';
+      const destination = new URL(returnTo, this.settings.origin);
+      insist(
+        returnTo.length < 4096 &&
+          returnTo.startsWith('/') &&
+          !returnTo.startsWith('//') &&
+          destination.origin === this.settings.origin &&
+          !destination.hash &&
+          (destination.pathname === '/' || /^\/w\/[a-f0-9-]{36}\/$/.test(destination.pathname)),
+        'Invalid sign-in return address',
+        400,
+      );
       const verifier = opaque(),
         nonce = opaque(),
         binding = opaque();
-      const state = this.store.state('google', { verifier, nonce, binding: hash(binding) });
+      const state = this.store.state('google', {
+        verifier,
+        nonce,
+        binding: hash(binding),
+        returnTo: destination.pathname + destination.search,
+      });
       res.cookie('argos_login', binding, {
         httpOnly: true,
         secure: this.settings.origin.startsWith('https:'),
@@ -188,10 +216,12 @@ export class Auth implements OAuthServerProvider {
     });
     const jwks = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
     app.get('/auth/google/callback', async (req, res) => {
-      const state = this.store.takeState<{ verifier: string; nonce: string; binding: string }>(
-        String(req.query.state ?? ''),
-        'google',
-      );
+      const state = this.store.takeState<{
+        verifier: string;
+        nonce: string;
+        binding: string;
+        returnTo?: string;
+      }>(String(req.query.state ?? ''), 'google');
       insist(state.binding === hash(cookies(req).argos_login ?? ''), 'Login browser mismatch', 400);
       insist(typeof req.query.code === 'string', 'Google sign-in cancelled', 400);
       const token = await requestJSON('https://oauth2.googleapis.com/token', {
@@ -241,7 +271,7 @@ export class Auth implements OAuthServerProvider {
         );
       this.issueSession(res, user.id);
       res.clearCookie('argos_login', { path: '/auth/google' });
-      res.redirect('/');
+      res.redirect(state.returnTo ?? '/');
     });
     app.post('/auth/logout', (req, res) => {
       this.store.run(
@@ -255,9 +285,26 @@ export class Auth implements OAuthServerProvider {
       app.get('/.well-known/oauth-protected-resource' + new URL(resource).pathname, (_req, res) =>
         res.set('Access-Control-Allow-Origin', '*').json({
           resource,
-          authorization_servers: [this.settings.origin],
+          authorization_servers: [workspaceURL(this.settings)],
           scopes_supported: ['mcp:tools'],
           resource_name: 'ArgosMCP',
+        }),
+      );
+    }
+    if (this.settings.basePath) {
+      const issuer = workspaceURL(this.settings);
+      app.get('/.well-known/oauth-authorization-server', (_req, res) =>
+        res.set('Access-Control-Allow-Origin', '*').json({
+          issuer,
+          authorization_endpoint: issuer + '/authorize',
+          token_endpoint: issuer + '/token',
+          registration_endpoint: issuer + '/register',
+          revocation_endpoint: issuer + '/revoke',
+          response_types_supported: ['code'],
+          code_challenge_methods_supported: ['S256'],
+          token_endpoint_auth_methods_supported: ['none'],
+          grant_types_supported: ['authorization_code', 'refresh_token'],
+          scopes_supported: ['mcp:tools'],
         }),
       );
     }
@@ -272,7 +319,7 @@ export class Auth implements OAuthServerProvider {
             }
           : {}),
         provider: this,
-        issuerUrl: new URL(this.settings.origin),
+        issuerUrl: new URL(workspaceURL(this.settings)),
         resourceServerUrl: new URL(this.audience),
         scopesSupported: ['mcp:tools'],
         resourceName: 'ArgosMCP',
@@ -288,7 +335,7 @@ export class Auth implements OAuthServerProvider {
       clientId: client.client_id,
       params: { ...params, resource: params.resource.href },
     });
-    res.redirect(`${this.settings.origin}/?consent=${request}`);
+    res.redirect(`${workspaceURL(this.settings)}/?consent=${request}`);
   }
   consentInfo(token: string) {
     const r = this.store.get<{ payload: string; expires_at: number }>(
@@ -314,7 +361,7 @@ export class Auth implements OAuthServerProvider {
     this.store.member(p);
     const url = new URL(state.params.redirectUri);
     if (state.params.state) url.searchParams.set('state', state.params.state);
-    url.searchParams.set('iss', this.settings.origin);
+    url.searchParams.set('iss', workspaceURL(this.settings));
     if (!accept) {
       url.searchParams.set('error', 'access_denied');
       return url.toString();

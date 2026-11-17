@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import {
   Store,
+  workspaceURL,
   Vault,
   Fault,
   insist,
@@ -52,7 +53,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
         return connectors.execute(c, t, a);
       },
     });
-  const devices = new Devices(store, vault, gateway, settings.origin);
+  const devices = new Devices(store, vault, gateway, workspaceURL(settings));
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.set({
@@ -150,6 +151,8 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     res.json({
       demo: settings.demo,
       hosted: !!settings.hosted,
+      selfService: !!settings.selfService,
+      workspaceUrl: workspaceURL(settings),
       googleConfigured: !!(settings.env.GOOGLE_CLIENT_ID && settings.env.GOOGLE_CLIENT_SECRET),
       user,
       canCreateWorkspace,
@@ -589,7 +592,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       Date.now() + 7 * DAY,
     );
     store.audit(p, 'member.invited');
-    res.json({ url: settings.origin + '/?invite=' + token });
+    res.json({ url: workspaceURL(settings) + '/?invite=' + token });
   });
   app.post('/api/invitations/accept', (req, res) => {
     const userId = auth.user(req),
@@ -798,7 +801,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
           );
           result = {
             ...(await gateway.invoke(p, connectionId, tool as ToolName, args, requestId)),
-            approvalUrl: settings.origin + '/?view=approvals',
+            approvalUrl: workspaceURL(settings) + '/?view=approvals',
           };
         }
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };

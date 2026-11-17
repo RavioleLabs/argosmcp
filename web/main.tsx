@@ -93,8 +93,17 @@ const date = (n: number) =>
 const duration = (hours: number) => (hours % 24 === 0 ? `${hours / 24} days` : `${hours} hours`);
 const remaining = (n: number) =>
   n <= Date.now() ? 'Expired' : `${Math.max(1, Math.ceil((n - Date.now()) / 3600000))} h remaining`;
+const workspacePath =
+  location.pathname.match(
+    /^\/w\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?=\/|$)/,
+  )?.[0] ?? '';
+const workspaceAddress = location.origin + workspacePath;
+const pendingStorageKey = 'argos_pending:' + (workspacePath || 'home');
+const signInURL =
+  '/auth/google?return_to=' + encodeURIComponent(workspacePath + '/' + location.search);
 async function api(path: string, body?: unknown, method = 'POST') {
-  const response = await fetch(path, {
+  const prefix = path === '/api/workspaces' || path === '/auth/logout' ? '' : workspacePath;
+  const response = await fetch(prefix + path, {
     ...(body === undefined
       ? {}
       : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
@@ -159,7 +168,9 @@ function WorkspaceSetup({
   onJoin: (token: string) => void;
   onSwitch: () => void;
 }) {
-  const [companyName, setCompanyName] = useState(session.workspaceName ?? '');
+  const [companyName, setCompanyName] = useState(
+    session.selfService ? '' : (session.workspaceName ?? ''),
+  );
   const [invitation, setInvitation] = useState(invite ?? '');
   const [inputError, setInputError] = useState('');
   const join = (event: React.FormEvent) => {
@@ -171,6 +182,13 @@ function WorkspaceSetup({
         const link = new URL(token);
         if (link.origin !== location.origin) throw new Error();
         token = link.searchParams.get('invite') ?? '';
+        if (!/^[A-Za-z0-9_-]{20,200}$/.test(token)) throw new Error();
+        if (link.pathname.replace(/\/$/, '') !== workspacePath) {
+          if (link.pathname !== '/' && !/^\/w\/[a-f0-9-]{36}\/$/.test(link.pathname))
+            throw new Error();
+          location.assign(link.pathname + '?invite=' + encodeURIComponent(token));
+          return;
+        }
       } catch {
         setInputError(
           'This invitation is for a different workspace. Open the original invitation link to join it.',
@@ -200,10 +218,12 @@ function WorkspaceSetup({
       <section className="setup-intro">
         <span className="eyebrow">WELCOME TO ARGOSMCP</span>
         <h1>
-          {session.canCreateWorkspace ? 'Start with your workspace.' : 'Let’s find your workspace.'}
+          {session.selfService || session.canCreateWorkspace
+            ? 'Start with your workspace.'
+            : 'Let’s find your workspace.'}
         </h1>
         <p>
-          {session.canCreateWorkspace
+          {session.selfService || session.canCreateWorkspace
             ? 'Give your company a home for its tools, access rules and shared memory.'
             : `You’re signed in, but this Google account hasn’t joined ${session.workspaceName ?? 'this workspace'} yet.`}
         </p>
@@ -213,8 +233,33 @@ function WorkspaceSetup({
           {inputError || error}
         </div>
       )}
-      <div className={`setup-options ${session.canCreateWorkspace ? '' : 'single'}`}>
-        {session.canCreateWorkspace && (
+      {!!session.directory?.length && (
+        <section className="workspace-directory" aria-label="Your workspaces">
+          <h2>Your workspaces</h2>
+          <div>
+            {session.directory.map((workspace: any) => (
+              <a key={workspace.id} className="workspace-card" href={workspace.url + '/'}>
+                <span className="workspace-avatar">{workspace.name.slice(0, 1)}</span>
+                <span>
+                  <strong>{workspace.name}</strong>
+                  <small>
+                    {workspace.role === 'owner'
+                      ? 'Owner'
+                      : workspace.role === 'admin'
+                        ? 'Administrator'
+                        : 'Member'}
+                  </small>
+                </span>
+                <span aria-hidden="true">↗</span>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+      <div
+        className={`setup-options ${session.selfService || session.canCreateWorkspace ? '' : 'single'}`}
+      >
+        {(session.selfService || session.canCreateWorkspace) && (
           <section className="setup-option">
             <span className="setup-symbol" aria-hidden="true">
               ＋
@@ -261,7 +306,9 @@ function WorkspaceSetup({
               spellCheck={false}
             />
             <button
-              className={session.canCreateWorkspace ? 'secondary' : 'primary'}
+              className={
+                session.selfService || session.canCreateWorkspace ? 'secondary' : 'primary'
+              }
               disabled={busy || !invitation.trim()}
             >
               {busy ? 'Please wait…' : 'Join workspace'}
@@ -269,7 +316,7 @@ function WorkspaceSetup({
           </form>
         </section>
       </div>
-      {!session.canCreateWorkspace && (
+      {!(session.selfService || session.canCreateWorkspace) && (
         <p className="setup-help">
           Setting up your company? Switch to the Google account designated as this workspace’s
           owner. For another company, ask for its own workspace link.
@@ -302,22 +349,36 @@ function App() {
       device: params.get('device'),
     };
     if (found.consent || found.invite || found.device) {
-      sessionStorage.setItem('argos_pending', JSON.stringify(found));
+      sessionStorage.setItem(pendingStorageKey, JSON.stringify(found));
       return found;
     }
     try {
-      return JSON.parse(sessionStorage.getItem('argos_pending') ?? '{}');
+      return JSON.parse(sessionStorage.getItem(pendingStorageKey) ?? '{}');
     } catch {
       return {};
     }
   });
   const loadSession = async () => {
     const s = await api('/api/session');
+    if (s.user && s.selfService) s.directory = (await api('/api/workspaces')).workspaces;
     setSession(s);
     if (s.organizations.length)
       setOrgId((old) =>
         s.organizations.some((o: any) => o.id === old) ? old : s.organizations[0].id,
       );
+    else setOrgId('');
+  };
+  const [creationRequestId, setCreationRequestId] = useState(() => crypto.randomUUID());
+  const createWorkspace = async (name: string) => {
+    if (session.selfService) {
+      const result = await api('/api/workspaces', { name, requestId: creationRequestId });
+      location.assign(result.url + '/');
+      return;
+    }
+    const result = await api('/api/organizations', { name });
+    await loadSession();
+    setOrgId(result.id);
+    setCreationRequestId(crypto.randomUUID());
   };
   const base = `/api/org/${orgId}`;
   const reload = async () => {
@@ -378,7 +439,7 @@ function App() {
     history.replaceState(null, '', `/?view=${next}`);
   };
   const clearPending = () => {
-    sessionStorage.removeItem('argos_pending');
+    sessionStorage.removeItem(pendingStorageKey);
     setPending({});
     setConsent(null);
     history.replaceState(null, '', '/');
@@ -415,9 +476,9 @@ function App() {
           </p>
           <label>
             Workspace URL
-            <input readOnly value={location.origin} />
+            <input readOnly value={workspaceAddress} />
           </label>
-          <button className="primary" onClick={() => copy(location.origin)}>
+          <button className="primary" onClick={() => copy(workspaceAddress)}>
             Copy workspace URL
           </button>
         </div>
@@ -570,7 +631,7 @@ function App() {
           </h2>
           <p>Manage your tools, agents and Engram memory in one place.</p>
           {session.googleConfigured && !session.demo ? (
-            <a className="primary button" href="/auth/google">
+            <a className="primary button" href={signInURL}>
               Continue with Google <span>↗</span>
             </a>
           ) : (
@@ -614,9 +675,7 @@ function App() {
         error={error}
         onCreate={(name) =>
           action(async () => {
-            const result = await api('/api/organizations', { name });
-            await loadSession();
-            setOrgId(result.id);
+            await createWorkspace(name);
           })
         }
         onJoin={(token) =>
@@ -629,7 +688,7 @@ function App() {
         onSwitch={() =>
           action(async () => {
             await api('/auth/logout', {});
-            location.assign('/auth/google');
+            location.assign(signInURL);
           })
         }
       />
@@ -644,21 +703,25 @@ function App() {
             <span className="eyebrow">WORKSPACE</span>
             <select
               aria-label="Active workspace"
-              value={orgId}
+              value={session.selfService ? session.workspaceUrl : orgId}
               onChange={(e) => {
+                if (session.selfService) {
+                  location.assign(e.target.value + '/');
+                  return;
+                }
                 setConsentSelected([]);
                 setOrgId(e.target.value);
               }}
             >
-              {session.organizations.map((o: any) => (
-                <option key={o.id} value={o.id}>
+              {(session.selfService ? session.directory : session.organizations).map((o: any) => (
+                <option key={o.id} value={session.selfService ? o.url : o.id}>
                   {o.name}
                 </option>
               ))}
             </select>
           </div>
         </div>
-        {!session.hosted && (
+        {(session.selfService || !session.hosted) && (
           <button
             className="text-button"
             onClick={() =>
@@ -669,10 +732,8 @@ function App() {
                     label="Company name"
                     onSubmit={(value) =>
                       action(async () => {
-                        const result = await api('/api/organizations', { name: value });
+                        await createWorkspace(value);
                         setModal(null);
-                        await loadSession();
-                        setOrgId(result.id);
                       })
                     }
                   />

@@ -14,9 +14,13 @@ export default defineConfig({
       // Automatic spans include full OAuth callback URLs. Keep trace sampling off.
       traces: { enabled: true, headSamplingRate: 0 },
     },
-    exports: { CompanyWorkspace: exports.durableObject({ storage: 'sqlite' }) },
+    exports: {
+      CompanyWorkspace: exports.durableObject({ storage: 'sqlite' }),
+      AccountDirectory: exports.durableObject({ storage: 'sqlite' }),
+    },
     env: {
       WORKSPACES: bindings.durableObject({ worker: 'argosmcp', exportName: 'CompanyWorkspace' }),
+      ACCOUNTS: bindings.durableObject({ worker: 'argosmcp', exportName: 'AccountDirectory' }),
       ASSETS: bindings.assets(),
       ARGOS_TENANTS_JSON: bindings.secret(),
       ARGOS_VAULT_KEYRING: bindings.secret(),

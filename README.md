@@ -13,10 +13,10 @@ This is an independent project at `~/raviolelabs/argosmcp`. It is not part of cl
 
 ## What works
 
-- Google identity and isolated company workspaces in the existing server architecture.
+- Google sign-up, self-service workspace creation and switching, with a separate company database for every workspace.
 - Mandatory company allow / approval / deny policies, with personal restrictions.
 - Device pairing through the signed-in dashboard, with a fingerprint comparison and explicit company selection.
-- Ed25519 device request proofs binding the workspace origin, path, timestamp, nonce and body. Replay protection persists across server restarts.
+- Ed25519 device request proofs binding the full workspace URL, request path, timestamp, nonce and body. Replay protection persists across server restarts.
 - Provider OAuth code exchange and refresh on the personal device: Slack and Linear PKCE; Notion's official MCP OAuth with public-client registration and PKCE.
 - Provider credentials and the device private key encrypted in a local SQLite database. Its wrapping key is in macOS Keychain, Windows Credential Manager or Linux Secret Service. No plaintext-file fallback or iCloud synchronization setting.
 - Local approvals showing the agent, company, account, exact arguments and expiry. A dashboard approval alone does not authorize local writes. Reads may be explicitly delegated locally.
@@ -85,7 +85,7 @@ Required server secrets: `ARGOS_TENANTS_JSON`, `ARGOS_VAULT_KEYRING` (encrypts a
 }
 ```
 
-Use a distinct UUID and canonical origin per company. Never alias a different company to the same object. After Google sign-in, the designated owner names and creates the workspace in the welcome screen; additional users need invitations. Signing in with another Google account does not claim the company. Hosted addresses are still provisioned by the operator; public self-service provisioning of arbitrary new companies is not implemented. Configure the Google redirect as `<origin>/auth/google/callback`.
+Each configured origin is a platform entry point with its own Google identity sessions. Any signed-in user can create a company at `/w/<random UUID>/`, become its owner, and switch between their workspaces. Each company has a separate SQLite Durable Object; a private per-account directory stores navigation hints and rechecks live membership. Existing root workspaces remain accessible only to their members or configured initial owner. New companies do not inherit RavioleLabs membership or data. Creation is idempotent and limited to 20 owned workspaces per account. Configure Google’s redirect as `<platform origin>/auth/google/callback`; new workspaces require no additional Google redirect registration. Custom hostnames still require operator-managed DNS.
 
 ```sh
 npm run test:cloudflare
@@ -93,7 +93,7 @@ npm run build:cloudflare
 npm run deploy
 ```
 
-The Worker is deployed at `https://argosmcp.leraviole.workers.dev` with Google OAuth configured for an isolated RavioleLabs preview workspace. The session endpoint reports `googleConfigured: true`; unauthenticated MCP requests return 401. The real Google callback exposed a Workers fetch compatibility issue, now corrected and covered by runtime tests. Real Google sign-in has been observed for an account without company membership. The designated owner must create the company from the welcome screen; the live owner-creation flow still needs browser verification. `argosnode.ai` DNS migration remains pending. Secrets must not be committed; never paste OAuth tokens into the dashboard or CI.
+The Worker is deployed at `https://argosmcp.leraviole.workers.dev` with Google OAuth configured. Real Google sign-in has been observed. The self-service implementation is covered by Workers runtime tests for account separation, creation retries, invitations, revocation, device proofs and MCP OAuth. `argosnode.ai` DNS migration remains pending. Secrets must not be committed; never paste OAuth tokens into the dashboard or CI.
 
 ## Verification
 
@@ -114,14 +114,14 @@ Memory records are individually encrypted on disk. Retrieval decrypts only the s
 
 ## Configure a hosted workspace
 
-Download the OAuth client JSON for a Google **Web application** registered in your own project. Its authorized redirect must match the company origin exactly. Keep that file out of Git.
+Download the OAuth client JSON for a Google **Web application** registered in your own project. Its authorized redirect must be `<platform origin>/auth/google/callback`. Keep that file out of Git.
 
 ```sh
 node scripts/configure-hosted.mjs https://raviolelabs.argosnode.ai owner@example.com /secure/path/google-client.json
 npx cf deploy --mode cloudflare --secrets-file .data/cloudflare.secrets.json
 ```
 
-This preserves existing workspace IDs and encryption keys and stores the server secrets in an ignored mode-600 file. Back up the encryption keyring securely. Do not replace it when redeploying an existing workspace. Additional companies require distinct canonical origins and UUIDs. The `argosnode.ai` domain must be configured on Cloudflare before using its custom workspace hostname.
+This preserves existing workspace IDs and encryption keys and stores the server secrets in an ignored mode-600 file. Back up the encryption keyring securely. Do not replace it when redeploying an existing workspace. Additional companies created from the dashboard receive independent UUIDs and `/w/<UUID>` URLs automatically. Use this full URL when pairing Argos Personal and append `/mcp` (or `/mcp/notion`, `/mcp/slack`, `/mcp/linear`, `/mcp/engram`) for an AI client. The `argosnode.ai` domain must be configured on Cloudflare before using its custom workspace hostname.
 
 ## Open source
 

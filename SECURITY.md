@@ -18,7 +18,11 @@ All writes require local confirmation even if the dashboard already approved the
 
 ## Server controls
 
-Pairing binds the device public key to one company/user after a signed-in fingerprint check. Ed25519 request signatures cover the exact origin, path, method, body digest, timestamp and one-time nonce. Signature checks are not proof that the software is unmodified.
+Every self-service company has a separate SQLite Durable Object bound immutably to its UUID, platform origin and founding Google subject. Google identity sessions live at the platform entry point. The Worker resolves the session and passes identity via internal RPC and a request-local Symbol; no client header establishes identity. A private account directory stores only workspace hints and checks live membership before returning them. Invitations and removal cannot grant or preserve access through a stale directory entry. All workspaces on one platform share a web origin; this is application/database isolation, not browser-origin isolation or isolation from a compromised operator. The CSP disallows third-party scripts and framing.
+
+Workspace creation requires a signed-in Google account, an exact same-origin JSON request and a bounded validated body. A durable idempotency key prevents duplicate creation after a lost response, and each account may create at most 20 workspaces. Browser cookies never authenticate MCP or native device endpoints. MCP audiences, authorization metadata, consent, codes and device signatures bind the full workspace URL.
+
+Pairing binds the device public key to one company/user after a signed-in fingerprint check. Ed25519 request signatures cover the exact workspace URL (including its company prefix), request path, method, body digest, timestamp and one-time nonce. Signature checks are not proof that the software is unmodified.
 
 The server rechecks live memberships, company and personal policies, grant allowlists, connection/device lifetimes, exact argument digest, policy revision, and current approver authority at dispatch. Once dispatched, an in-flight provider call cannot reliably be recalled. The maximum dispatch permit is 30 seconds, with no automatic retry. Receipts are device-bound and hashed at rest; results are only returned to the original user/grant.
 
@@ -41,7 +45,7 @@ Report a vulnerability privately to the deployment owner. Do not include real OA
 
 ## Local memory
 
-Engram records are encrypted with context-bound associated data. The context binds canonical workspace origin, company, scope and user/team ID. There is no plaintext search index. Team access is rechecked before dispatch, and results are readable only by the original requester and grant. The host device user can access its team data directly; this is part of the accepted local trust boundary. Removing membership cannot retract copies previously delivered. The built-in backend uses lexical BM25 retrieval, with a 10,000-record limit per context.
+Engram records are encrypted with context-bound associated data. The context binds canonical workspace URL, company, scope and user/team ID. There is no plaintext search index. Team access is rechecked before dispatch, and results are readable only by the original requester and grant. The host device user can access its team data directly; this is part of the accepted local trust boundary. Removing membership cannot retract copies previously delivered. The built-in backend uses lexical BM25 retrieval, with a 10,000-record limit per context.
 
 ## Dependency audit and telemetry
 
