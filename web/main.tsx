@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
+import { SetupGuide, SetupExplanation } from './SetupGuide';
+import { setupProgress, workspacePage } from './onboarding';
 
 type View =
+  | 'setup'
   | 'overview'
   | 'connections'
   | 'policies'
@@ -34,6 +37,7 @@ type Connection = {
   }[];
 };
 const views: { id: View; title: string; icon: string }[] = [
+  { id: 'setup', title: 'Getting started', icon: '→' },
   { id: 'overview', title: 'Overview', icon: '◈' },
   { id: 'connections', title: 'Connections', icon: '↔' },
   { id: 'policies', title: 'Access rules', icon: '≋' },
@@ -228,6 +232,7 @@ function WorkspaceSetup({
             : `You’re signed in, but this Google account hasn’t joined ${session.workspaceName ?? 'this workspace'} yet.`}
         </p>
       </section>
+      <SetupExplanation />
       {(error || inputError) && (
         <div className="error" role="alert">
           {inputError || error}
@@ -265,7 +270,10 @@ function WorkspaceSetup({
               ＋
             </span>
             <h2>Create a workspace</h2>
-            <p>You’ll be its owner. Invite your team when you’re ready.</p>
+            <p>
+              You’ll be its owner. Next, we’ll guide you through installing Argos Personal and
+              connecting your first tool.
+            </p>
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -331,8 +339,12 @@ function App() {
     [orgId, setOrgId] = useState(''),
     [data, setData] = useState<any>(null);
   const [view, setView] = useState<View>(
-    (new URLSearchParams(location.search).get('view') as View) || 'overview',
+    views.find((v) => v.id === new URLSearchParams(location.search).get('view'))?.id ?? 'overview',
   );
+  const [viewChosen, setViewChosen] = useState(
+    views.some((v) => v.id === new URLSearchParams(location.search).get('view')),
+  );
+  const [setupProvider, setSetupProvider] = useState<string | undefined>();
   const [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(false),
@@ -372,13 +384,14 @@ function App() {
   const createWorkspace = async (name: string) => {
     if (session.selfService) {
       const result = await api('/api/workspaces', { name, requestId: creationRequestId });
-      location.assign(result.url + '/');
+      location.assign(result.url + '/?view=setup');
       return;
     }
     const result = await api('/api/organizations', { name });
     await loadSession();
     setOrgId(result.id);
     setCreationRequestId(crypto.randomUUID());
+    go('setup');
   };
   const base = `/api/org/${orgId}`;
   const reload = async () => {
@@ -434,15 +447,16 @@ function App() {
     }
   };
   const go = (next: View) => {
+    setViewChosen(true);
     setView(next);
     setMenu(false);
-    history.replaceState(null, '', `/?view=${next}`);
+    history.replaceState(null, '', workspacePage(workspacePath, next));
   };
   const clearPending = () => {
     sessionStorage.removeItem(pendingStorageKey);
     setPending({});
     setConsent(null);
-    history.replaceState(null, '', '/');
+    history.replaceState(null, '', workspacePage(workspacePath, view));
   };
   const copy = async (value: string) => {
     try {
@@ -461,29 +475,18 @@ function App() {
       consent.resource === session.mcpUrl ||
       consent.resource === session.mcpUrl + '/' + c.provider,
   );
-  const openConnect = (provider: string) =>
-    setModal({
-      title: `Connect ${providerNames[provider]} on your device`,
-      content: (
-        <div className="form-stack">
-          <p>
-            Open Argos Personal, pair this device with this workspace, then connect{' '}
-            {providerNames[provider]} there.
-          </p>
-          <p>
-            OAuth credentials stay in your device’s keychain. This dashboard receives connection
-            status and tool results, never your provider tokens.
-          </p>
-          <label>
-            Workspace URL
-            <input readOnly value={workspaceAddress} />
-          </label>
-          <button className="primary" onClick={() => copy(workspaceAddress)}>
-            Copy workspace URL
-          </button>
-        </div>
-      ),
-    });
+  useEffect(() => {
+    if (data && !viewChosen && !session.demo && !setupProgress(data, session.user.id).authorized) {
+      setView('setup');
+      setViewChosen(true);
+      history.replaceState(null, '', workspacePage(workspacePath, 'setup'));
+    }
+  }, [data, viewChosen, session]);
+  const openConnect = (provider: string) => {
+    setSetupProvider(provider);
+    setModal(null);
+    go('setup');
+  };
   const openAgent = () =>
     setModal({
       title: 'Authorize an agent',
@@ -955,6 +958,7 @@ function App() {
                     {
                       (
                         {
+                          setup: 'Let’s connect your workspace.',
                           overview: 'Overview',
                           connections: 'Connections',
                           policies: 'Access rules',
@@ -972,6 +976,7 @@ function App() {
                     {
                       (
                         {
+                          setup: 'Install the companion app, connect a tool, then add your AI.',
                           overview: 'Connect your tools, set permissions and stay in control.',
                           connections:
                             'Credentials stay on your device. Company rules apply to every request.',
@@ -1001,6 +1006,21 @@ function App() {
                   </button>
                 ) : null}
               </div>
+              {view === 'setup' && (
+                <SetupGuide
+                  key={orgId + session.user.id + (setupProvider ?? '')}
+                  data={data}
+                  userId={session.user.id}
+                  workspaceUrl={workspaceAddress}
+                  mcpUrl={session.mcpUrl}
+                  provider={setupProvider}
+                  onCopy={copy}
+                  onRefresh={() => action(reload)}
+                  onAgents={() => go('agents')}
+                  onDashboard={() => go('overview')}
+                  busy={busy}
+                />
+              )}
               {view === 'overview' && (
                 <>
                   <section className="gateway-map" aria-label="Agent request flow">
@@ -1148,9 +1168,12 @@ function App() {
                   <section className="panel">
                     <h2>Your personal devices</h2>
                     <p>
-                      Pair from Argos Personal. Keep it running to execute tools and review
-                      approvals.
+                      Argos Personal is the companion app that runs your tools on your computer.
+                      Keep it open to execute actions and review approvals.
                     </p>
+                    <button className="text-button" onClick={() => go('setup')}>
+                      Install the app & pair a device →
+                    </button>
                     {(data.devices ?? []).map((d: any) => (
                       <div className="connection-row" key={d.id}>
                         <div className="grow">

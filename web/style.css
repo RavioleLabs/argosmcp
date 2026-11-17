@@ -2169,3 +2169,241 @@ h1 {
   margin-top: 5px;
   color: #64748b;
 }
+
+/* One guided path from a new company to its first real tool. */
+.setup-explanation {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin: 28px 0;
+}
+.setup-explanation > div {
+  position: relative;
+  padding: 24px 24px 24px 62px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.setup-explanation > div > span {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+  color: var(--teal);
+  font-size: 23px;
+}
+.setup-explanation strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.setup-explanation p,
+.setup-caption {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.getting-started {
+  max-width: 1120px;
+}
+.getting-started .setup-explanation {
+  margin-top: 0;
+}
+.setup-journey {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px;
+  border-radius: 14px;
+  background: #eef4fa;
+}
+.setup-journey > span {
+  font-weight: 600;
+  font-size: 14px;
+}
+.setup-journey small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 4px;
+}
+.setup-journey i {
+  color: var(--muted);
+  font-style: normal;
+}
+.getting-started > .setup-caption {
+  margin: 12px 0 28px;
+}
+.setup-guide-body {
+  display: grid;
+  grid-template-columns: 235px minmax(0, 1fr);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.setup-steps {
+  padding: 20px 14px;
+  border-right: 1px solid var(--line);
+  background: #fafbfd;
+}
+.setup-steps button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 10px;
+  margin-bottom: 6px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+}
+.setup-steps button[aria-current='step'] {
+  background: #eaf2fc;
+  color: #0066cc;
+}
+.setup-steps button > span {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: 27px;
+  height: 27px;
+  flex-shrink: 0;
+  background: white;
+  font-size: 12px;
+}
+.setup-steps button .step-done {
+  background: var(--allow-bg);
+  color: var(--allow);
+  border-color: transparent;
+}
+.setup-detail {
+  padding: 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  min-width: 0;
+}
+.setup-detail h2 {
+  font-size: 27px;
+  letter-spacing: -0.7px;
+}
+.setup-detail p,
+.setup-instructions {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--muted);
+}
+.setup-detail p strong,
+.setup-instructions strong {
+  color: var(--ink);
+}
+.setup-detail .button {
+  text-decoration: none;
+}
+.setup-instructions {
+  margin: 0;
+  padding-left: 20px;
+}
+.setup-instructions li + li {
+  margin-top: 8px;
+}
+.setup-availability {
+  width: 100%;
+  padding: 18px;
+  background: #f5f7fa;
+  border-radius: 12px;
+}
+.setup-availability > strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+.setup-availability p,
+.setup-availability a {
+  font-size: 12px;
+}
+.setup-detail details {
+  font-size: 13px;
+  width: 100%;
+}
+.setup-detail summary {
+  cursor: pointer;
+  padding: 4px 0;
+}
+.setup-detail details p {
+  margin: 12px 0;
+}
+.setup-copy {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.setup-copy input,
+.setup-copy select {
+  width: 100%;
+  min-width: 0;
+}
+.setup-live {
+  width: 100%;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.setup-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.getting-started > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.getting-started > footer button {
+  flex-shrink: 0;
+}
+@media (max-width: 760px) {
+  .setup-explanation {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .setup-guide-body {
+    grid-template-columns: 1fr;
+  }
+  .setup-steps {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 12px;
+  }
+  .setup-steps button {
+    margin: 0;
+  }
+  .setup-detail {
+    padding: 24px 20px;
+  }
+  .setup-journey {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 16px;
+  }
+  .setup-journey > span {
+    font-size: 12px;
+  }
+  .getting-started > footer {
+    align-items: flex-start;
+  }
+}

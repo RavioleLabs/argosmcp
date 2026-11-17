@@ -102,7 +102,7 @@ execFileSync(
 );
 writeFileSync(
   join(contents, 'Info.plist'),
-  `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleExecutable</key><string>ArgosPersonal</string><key>CFBundleIdentifier</key><string>ai.argosnode.personal</string><key>CFBundleName</key><string>Argos Personal</string><key>CFBundleVersion</key><string>1</string><key>CFBundleShortVersionString</key><string>0.1.0</string><key>LSMinimumSystemVersion</key><string>13.0</string><key>NSHighResolutionCapable</key><true/><key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict></dict></plist>`,
+  `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleExecutable</key><string>ArgosPersonal</string><key>CFBundleIdentifier</key><string>ai.argosnode.personal</string><key>CFBundleName</key><string>Argos Personal</string><key>CFBundleVersion</key><string>1</string><key>CFBundleShortVersionString</key><string>0.1.0</string><key>LSMinimumSystemVersion</key><string>26.0</string><key>NSHighResolutionCapable</key><true/><key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict></dict></plist>`,
 );
 // Local ad-hoc signature only; a distributable release requires Developer ID and notarization.
 for (const path of [...copied.values(), nodeTarget])

@@ -50,6 +50,12 @@ open "build/Argos Personal.app"
 
 The app includes the Node runtime and production dependencies for the Mac on which it is built. It has a **local ad-hoc signature**, not an Apple Developer ID signature or notarization. Windows/Linux can run the connector with Node; native installers for them are not included.
 
+### Guided setup and Mac download
+
+New workspaces open **Getting started**. The guide explains the browser dashboard and companion app before asking users to install anything, then walks through installation, pairing, a first tool and MCP client authorization. It remains available in the sidebar. Each teammate follows it with their own account and computer.
+
+[Download Argos Personal for Apple silicon](https://github.com/RavioleLabs/argosmcp/releases/download/personal-v0.1.0-preview.1/Argos-Personal-macOS-arm64.zip) (macOS 26 or later, preview). Unzip, move the app to Applications, and open it. This is an ad-hoc signed build, **not Apple-notarized**; Gatekeeper may block it. A signed public installer is not available yet. [Release details and SHA-256 checksum](https://github.com/RavioleLabs/argosmcp/releases/tag/personal-v0.1.0-preview.1). Intel Macs, Windows and Linux currently require the source installation above.
+
 ### Pair and connect
 
 1. Open Argos Personal and enter the company workspace URL (the demo URL above for a local test).

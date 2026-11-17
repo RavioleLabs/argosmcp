@@ -42,3 +42,7 @@ The personal connector now includes encrypted personal/team memory with explicit
 ## Self-service onboarding — 2026-11-18
 
 A new Google account must be able to create its own company without an invitation or operator intervention. Creating a company establishes its owner; joining an existing company requires an invitation. Users can belong to and switch between several companies. RavioleLabs is one customer workspace, never an implicit membership granted to all users.
+
+## Installation onboarding — 2026-11-18
+
+Explain ArgosMCP (browser workspace and company rules) and Argos Personal (companion app on each user’s computer) before workspace creation. After creation, guide installation, device pairing, provider connection and AI authorization. The Getting started page remains accessible; connection buttons return to the relevant guide instead of an unexplained modal. Progress reflects the signed-in user’s current device, connection and grant, not other members. Keep the workspace URL prefix through navigation and pairing. Never present a download click as successful installation. macOS preview distribution is Apple silicon/macOS 26+, ad-hoc signed and not notarized; the UI must disclose this limitation.
