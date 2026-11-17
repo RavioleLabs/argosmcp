@@ -51,7 +51,23 @@ it('completes Google PKCE sign-in and isolates the owner session', async () => {
     });
     expect(await session.json()).toMatchObject({
       user: { email: 'owner@alpha.test' },
-      organizations: [{ name: 'Alpha', role: 'owner' }],
+      organizations: [],
+      canCreateWorkspace: true,
+      workspaceName: 'Alpha',
+    });
+    const created = await exports.default.fetch(origin + '/api/organizations', {
+      method: 'POST',
+      headers: { Cookie: sessionCookie, Origin: origin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Alpha team' }),
+    });
+    expect(created.status).toBe(200);
+    expect(await created.json()).toEqual({ id: '00000000-0000-4000-8000-000000000101' });
+    const afterCreate = await exports.default.fetch(origin + '/api/session', {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(await afterCreate.json()).toMatchObject({
+      canCreateWorkspace: false,
+      organizations: [{ name: 'Alpha team', role: 'owner' }],
     });
     const other = await exports.default.fetch('https://beta.example.test/api/session', {
       headers: { Cookie: sessionCookie },

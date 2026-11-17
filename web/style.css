@@ -1996,3 +1996,135 @@ h1 {
     font-size: 12px;
   }
 }
+
+.workspace-setup {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 36px 36px 24px;
+  min-height: 100svh;
+}
+.workspace-setup > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.setup-account {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted, #64748b);
+}
+.setup-account strong {
+  color: var(--ink, #18212f);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.setup-intro {
+  margin: 86px auto 36px;
+  max-width: 640px;
+  text-align: center;
+}
+.setup-intro h1 {
+  font-size: clamp(32px, 4vw, 48px);
+  letter-spacing: -0.045em;
+  line-height: 1.12;
+  margin: 16px 0;
+  font-weight: 600;
+}
+.setup-intro p {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--muted, #64748b);
+}
+.setup-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.setup-options.single {
+  grid-template-columns: minmax(0, 520px);
+  justify-content: center;
+}
+.setup-option {
+  border: 1px solid #e5e9f0;
+  background: #fff;
+  border-radius: 24px;
+  padding: 32px;
+}
+.setup-symbol {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  background: #edf3ff;
+  color: #246bfe;
+  border-radius: 14px;
+  font-size: 25px;
+}
+.setup-option h2 {
+  font-size: 23px;
+  letter-spacing: -0.025em;
+  margin: 22px 0 8px;
+}
+.setup-option p {
+  color: var(--muted, #64748b);
+  line-height: 1.6;
+  min-height: 52px;
+  margin-bottom: 26px;
+}
+.setup-option form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.setup-option label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.setup-option input {
+  width: 100%;
+  min-width: 0;
+}
+.setup-option form button {
+  margin-top: 8px;
+  width: 100%;
+}
+.setup-help {
+  max-width: 520px;
+  margin: 24px auto;
+  color: var(--muted, #64748b);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+}
+.workspace-setup > footer {
+  padding: 36px 0 16px;
+  text-align: center;
+  color: var(--muted, #64748b);
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .workspace-setup {
+    padding: 24px 20px;
+  }
+  .workspace-setup > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .setup-account {
+    align-items: flex-start;
+  }
+  .setup-intro {
+    margin-top: 44px;
+    text-align: left;
+  }
+  .setup-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .setup-option {
+    padding: 24px;
+  }
+}

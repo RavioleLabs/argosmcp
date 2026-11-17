@@ -139,9 +139,14 @@ export class Auth implements OAuthServerProvider {
         user?.email.toLowerCase() === this.settings.tenant.ownerEmail.toLowerCase(),
         'Only the designated owner may initialize this workspace',
       );
-      name = this.settings.tenant.name;
     }
     this.store.db.transaction(() => {
+      if (this.settings.tenant)
+        insist(
+          !this.store.get('SELECT 1 FROM organizations'),
+          'This workspace has already been created',
+          409,
+        );
       this.store.run('INSERT INTO organizations(id,name) VALUES(?,?)', orgId, name);
       this.store.run('INSERT INTO members VALUES(?,?,?)', orgId, userId, 'owner');
       this.store.audit({ orgId, userId }, 'organization.created', orgId);
@@ -173,6 +178,7 @@ export class Auth implements OAuthServerProvider {
         redirect_uri: this.settings.origin + '/auth/google/callback',
         response_type: 'code',
         scope: 'openid email profile',
+        prompt: 'select_account',
         state,
         nonce,
         code_challenge: createHash('sha256').update(verifier).digest('base64url'),
@@ -219,22 +225,13 @@ export class Auth implements OAuthServerProvider {
       );
       if (!user) {
         user = { id: id() };
-        this.store.db.transaction(() => {
-          this.store.run(
-            'INSERT INTO users VALUES(?,?,?,?)',
-            user!.id,
-            payload.sub,
-            payload.email,
-            String(payload.name ?? payload.email),
-          );
-          if (
-            !this.settings.tenant ||
-            (!this.store.get('SELECT 1 FROM organizations') &&
-              payload.email!.toString().toLowerCase() ===
-                this.settings.tenant.ownerEmail.toLowerCase())
-          )
-            this.createOrg(user!.id, 'My workspace');
-        })();
+        this.store.run(
+          'INSERT INTO users VALUES(?,?,?,?)',
+          user.id,
+          payload.sub,
+          payload.email,
+          String(payload.name ?? payload.email),
+        );
       } else
         this.store.run(
           'UPDATE users SET email=?,name=? WHERE id=?',
@@ -242,12 +239,6 @@ export class Auth implements OAuthServerProvider {
           String(payload.name ?? payload.email),
           user.id,
         );
-      if (
-        this.settings.tenant &&
-        !this.store.get('SELECT 1 FROM organizations') &&
-        payload.email.toLowerCase() === this.settings.tenant.ownerEmail.toLowerCase()
-      )
-        this.createOrg(user.id, this.settings.tenant.name);
       this.issueSession(res, user.id);
       res.clearCookie('argos_login', { path: '/auth/google' });
       res.redirect('/');

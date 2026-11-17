@@ -135,11 +135,25 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'argosmcp' }));
   app.get('/api/session', (req, res) => {
     const userId = auth.session(req);
+    const user = userId
+      ? store.get<{ id: string; name: string; email: string }>(
+          'SELECT id,name,email FROM users WHERE id=?',
+          userId,
+        )
+      : null;
+    const canCreateWorkspace =
+      !!user &&
+      (!settings.hosted ||
+        (!!settings.tenant &&
+          user.email.toLowerCase() === settings.tenant.ownerEmail.toLowerCase() &&
+          !store.get('SELECT 1 FROM organizations')));
     res.json({
       demo: settings.demo,
       hosted: !!settings.hosted,
       googleConfigured: !!(settings.env.GOOGLE_CLIENT_ID && settings.env.GOOGLE_CLIENT_SECRET),
-      user: userId ? store.get('SELECT id,name,email FROM users WHERE id=?', userId) : null,
+      user,
+      canCreateWorkspace,
+      workspaceName: user ? (settings.tenant?.name ?? null) : null,
       organizations: userId
         ? store.all(
             'SELECT o.*,m.role FROM organizations o JOIN members m ON o.id=m.org_id WHERE m.user_id=? AND NOT EXISTS(SELECT 1 FROM blocked_members b WHERE b.org_id=m.org_id AND b.user_id=m.user_id)',
@@ -156,7 +170,11 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     res.json({ ok: true });
   });
   app.post('/api/organizations', (req, res) => {
-    insist(!settings.hosted, 'Hosted workspaces are provisioned separately', 403);
+    insist(
+      !settings.hosted || settings.tenant,
+      'This address is not configured for workspace creation',
+      403,
+    );
     const input = z.object({ name }).strict().parse(req.body);
     res.json({ id: auth.createOrg(auth.user(req), input.name) });
   });

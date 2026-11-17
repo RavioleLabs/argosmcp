@@ -142,6 +142,143 @@ function Empty({ title, children }: { title: string; children?: React.ReactNode 
     </div>
   );
 }
+function WorkspaceSetup({
+  session,
+  invite,
+  busy,
+  error,
+  onCreate,
+  onJoin,
+  onSwitch,
+}: {
+  session: any;
+  invite?: string;
+  busy: boolean;
+  error: string;
+  onCreate: (name: string) => void;
+  onJoin: (token: string) => void;
+  onSwitch: () => void;
+}) {
+  const [companyName, setCompanyName] = useState(session.workspaceName ?? '');
+  const [invitation, setInvitation] = useState(invite ?? '');
+  const [inputError, setInputError] = useState('');
+  const join = (event: React.FormEvent) => {
+    event.preventDefault();
+    setInputError('');
+    let token = invitation.trim();
+    if (token.includes('://')) {
+      try {
+        const link = new URL(token);
+        if (link.origin !== location.origin) throw new Error();
+        token = link.searchParams.get('invite') ?? '';
+      } catch {
+        setInputError(
+          'This invitation is for a different workspace. Open the original invitation link to join it.',
+        );
+        return;
+      }
+    }
+    if (!/^[A-Za-z0-9_-]{20,200}$/.test(token)) {
+      setInputError('Paste the invitation link or code your administrator shared with you.');
+      return;
+    }
+    onJoin(token);
+  };
+  return (
+    <main className="workspace-setup">
+      <header>
+        <Logo />
+        <div className="setup-account">
+          <span>
+            Signed in as <strong>{session.user.email}</strong>
+          </span>
+          <button className="text-button" disabled={busy} onClick={onSwitch}>
+            Switch account ↗
+          </button>
+        </div>
+      </header>
+      <section className="setup-intro">
+        <span className="eyebrow">WELCOME TO ARGOSMCP</span>
+        <h1>
+          {session.canCreateWorkspace ? 'Start with your workspace.' : 'Let’s find your workspace.'}
+        </h1>
+        <p>
+          {session.canCreateWorkspace
+            ? 'Give your company a home for its tools, access rules and shared memory.'
+            : `You’re signed in, but this Google account hasn’t joined ${session.workspaceName ?? 'this workspace'} yet.`}
+        </p>
+      </section>
+      {(error || inputError) && (
+        <div className="error" role="alert">
+          {inputError || error}
+        </div>
+      )}
+      <div className={`setup-options ${session.canCreateWorkspace ? '' : 'single'}`}>
+        {session.canCreateWorkspace && (
+          <section className="setup-option">
+            <span className="setup-symbol" aria-hidden="true">
+              ＋
+            </span>
+            <h2>Create a workspace</h2>
+            <p>You’ll be its owner. Invite your team when you’re ready.</p>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                onCreate(companyName.trim());
+              }}
+            >
+              <label htmlFor="setup-company">Workspace name</label>
+              <input
+                id="setup-company"
+                required
+                maxLength={120}
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                placeholder="Your company"
+                autoComplete="organization"
+              />
+              <button className="primary" disabled={busy || !companyName.trim()}>
+                {busy ? 'Please wait…' : 'Create workspace'}
+              </button>
+            </form>
+          </section>
+        )}
+        <section className="setup-option">
+          <span className="setup-symbol" aria-hidden="true">
+            ↗
+          </span>
+          <h2>Join a workspace</h2>
+          <p>Use an invitation from your administrator, with the Google account it was sent to.</p>
+          <form onSubmit={join}>
+            <label htmlFor="setup-invitation">Invitation link or code</label>
+            <input
+              id="setup-invitation"
+              value={invitation}
+              onChange={(event) => setInvitation(event.target.value)}
+              placeholder="Paste your invitation"
+              required
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <button
+              className={session.canCreateWorkspace ? 'secondary' : 'primary'}
+              disabled={busy || !invitation.trim()}
+            >
+              {busy ? 'Please wait…' : 'Join workspace'}
+            </button>
+          </form>
+        </section>
+      </div>
+      {!session.canCreateWorkspace && (
+        <p className="setup-help">
+          Setting up your company? Switch to the Google account designated as this workspace’s
+          owner. For another company, ask for its own workspace link.
+        </p>
+      )}
+      <footer>Each company has its own workspace. Your personal connections stay yours.</footer>
+    </main>
+  );
+}
 function App() {
   const [session, setSession] = useState<any>(null),
     [orgId, setOrgId] = useState(''),
@@ -468,6 +605,35 @@ function App() {
         </main>
       </div>
     );
+  if (!session.organizations.length)
+    return (
+      <WorkspaceSetup
+        session={session}
+        invite={pending.invite}
+        busy={busy}
+        error={error}
+        onCreate={(name) =>
+          action(async () => {
+            const result = await api('/api/organizations', { name });
+            await loadSession();
+            setOrgId(result.id);
+          })
+        }
+        onJoin={(token) =>
+          action(async () => {
+            await api('/api/invitations/accept', { token });
+            clearPending();
+            await loadSession();
+          }, 'Invitation accepted.')
+        }
+        onSwitch={() =>
+          action(async () => {
+            await api('/auth/logout', {});
+            location.assign('/auth/google');
+          })
+        }
+      />
+    );
   return (
     <div className="shell">
       <aside className={`sidebar ${menu ? 'open' : ''}`}>
@@ -616,11 +782,7 @@ function App() {
             </div>
           )}
           {!data ? (
-            <div className="loading inline">
-              {session.organizations.length
-                ? 'Loading workspace…'
-                : 'You need an invitation to join this workspace.'}
-            </div>
+            <div className="loading inline">Loading workspace…</div>
           ) : (
             <>
               {pairDevice && (
