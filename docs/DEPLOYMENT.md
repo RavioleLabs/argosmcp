@@ -47,3 +47,9 @@ The macOS app must be rebuilt with this version to accept workspace paths. Exist
 Self-service release deployed as Worker version `71456e2d-7efd-4df4-b0a1-1f317a39dc6c`. Type checks, 78 Node tests, 15 Workers runtime tests and the web build pass. The rebuilt Argos Personal macOS bundle passes local ad-hoc signature verification.
 
 Public HTTP checks confirm the HTML and bundled assets load, `/api/session` reports Google and self-service enabled, anonymous `/api/workspaces` and `/mcp` return 401, and unknown workspace APIs return 404. The browser was signed in with a non-reserved Google account before deployment, but native browser control stopped exposing page contents after refresh. A real user submitting the new workspace form and reaching the owner dashboard has not yet been observed. This limitation must not be represented as a verified live end-to-end signup.
+
+## Guided installation release — 2026-11-18
+
+Worker version `5165124f-32d3-47e2-a3b0-d4ec5719ebb0` deploys the installation guide, the pre-creation explanation of the companion app, and workspace-preserving navigation. The macOS Apple silicon preview is published as GitHub release `personal-v0.1.0-preview.1`, with an archive checksum matching GitHub’s uploaded asset digest. It requires macOS 26 or later and is not notarized.
+
+82 Node tests, 15 Workers tests, type checks, builds and CI pass. Live browser inspection confirms the pre-creation explanation, an existing user-created workspace with the Owner role, and the full Getting started page with the download button, installation steps and companion-app explanation. This supersedes the previous browser-inspection blocker for these screens; device installation and real provider consent have not been verified by that inspection.
