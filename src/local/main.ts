@@ -49,11 +49,15 @@ try {
       polling = false;
     }
   };
-  const timer = setInterval(() => {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  // A second instance must fail its bind before it can refresh or dispatch work.
+  server.once('listening', () => {
+    timer = setInterval(() => {
+      void tick();
+    }, 4000);
+    timer.unref();
     void tick();
-  }, 4000);
-  timer.unref();
-  void tick();
+  });
   for (const signal of ['SIGTERM', 'SIGINT'])
     process.once(signal, () => {
       clearInterval(timer);

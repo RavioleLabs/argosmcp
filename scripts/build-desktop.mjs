@@ -1,11 +1,4 @@
-import {
-  cpSync,
-  mkdirSync,
-  writeFileSync,
-  existsSync,
-  realpathSync,
-  rmSync,
-} from 'node:fs';
+import { cpSync, mkdirSync, writeFileSync, existsSync, realpathSync, rmSync } from 'node:fs';
 import { resolve, dirname, basename, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 if (process.platform !== 'darwin')
