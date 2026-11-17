@@ -15,8 +15,9 @@ if (process.argv[2] === '--missing-key') {
     const storage = new LocalStorage(process.argv[3]);
     storage.close();
     process.exitCode = 1;
-  } catch {
-    process.exitCode = 0;
+  } catch (error) {
+    process.exitCode =
+      error instanceof Error && error.message.includes('Keychain key missing') ? 0 : 2;
   }
 } else {
   assert.equal(
