@@ -93,7 +93,7 @@ npm run build:cloudflare
 npm run deploy
 ```
 
-The Worker is deployed at `https://argosmcp.leraviole.workers.dev` in setup-only mode: the public page is available, but sign-in and MCP calls remain disabled until a company and Google OAuth are provisioned. Google client registration and `argosnode.ai` DNS remain unconfigured. Secrets must not be committed; never paste OAuth tokens into the dashboard or CI.
+The Worker is deployed at `https://argosmcp.leraviole.workers.dev` in setup-only mode: the public page is available, but sign-in and MCP calls remain disabled until a company and Google OAuth are provisioned. The Google Web OAuth client has been created in the dedicated ArgosMCP project with preview and production callbacks. Its secret still needs to be installed before sign-in can be verified. `argosnode.ai` DNS migration is pending. Secrets must not be committed; never paste OAuth tokens into the dashboard or CI.
 
 ## Verification
 

@@ -6,12 +6,14 @@ The repository is public at https://github.com/RavioleLabs/argosmcp. The Worker 
 
 The RavioleLabs company configuration has been prepared locally for `https://raviolelabs.argosnode.ai`. The owner identity and encryption keys live only in the ignored `.data/cloudflare.secrets.json`. Every company gets a distinct UUID and canonical HTTPS origin. The root platform hostname is not a shared company database.
 
-1. Activate Google Cloud on the intended owner account and create a dedicated ArgosMCP project.
-2. Register a Google OAuth **Web application**, with `https://raviolelabs.argosnode.ai/auth/google/callback` as an authorized redirect. Use only `openid email profile` for Argos login.
-3. Download the Google client JSON locally. Run `scripts/configure-hosted.mjs` as described in README. This preserves the keyring and company UUID.
+1. Google Cloud is activated and the dedicated `argosmcp-raviolelabs` project and ArgosMCP consent profile have been created. The audience is External, in Testing mode.
+2. The ArgosMCP Google OAuth **Web application** has been created with both `https://raviolelabs.argosnode.ai/auth/google/callback` and `https://argosmcp.leraviole.workers.dev/auth/google/callback` as authorized redirects. Argos login requests only `openid email profile`.
+3. **Pending:** save the Google client JSON locally in the ignored `.data` directory, then run `scripts/configure-hosted.mjs` as described in README. This preserves the keyring and company UUID. Never paste the secret into chat or commit it.
 4. Complete the DNS migration below, then bind the workspace hostname as a Worker custom domain.
 5. Deploy with the secrets file, without `ARGOS_SETUP_ONLY=1`. Verify sign-in with the designated owner before inviting members.
 6. Pair Argos Personal, compare fingerprints, create an agent grant, and test an Engram context. Real provider connections require separate local consent.
+
+The ignored configuration also contains an isolated RavioleLabs preview workspace at the workers.dev origin, with a **different company UUID**. This allows testing Google login before the production DNS migration. Neither workspace is active until the complete secrets are deployed. Do not reuse the preview UUID for production.
 
 ## DNS migration
 
