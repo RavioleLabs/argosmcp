@@ -1,3 +1,4 @@
+import type { RemoteDefinition } from '../remote-definition.js';
 import Database from 'better-sqlite3';
 import { Entry } from '@napi-rs/keyring';
 import { mkdirSync, chmodSync } from 'node:fs';
@@ -7,7 +8,8 @@ import { Vault, hash, insist } from '../foundation.js';
 import type { Credentials } from '../connectors.js';
 export interface LocalConnection {
   id: string;
-  provider: 'slack' | 'linear' | 'notion';
+  provider: 'slack' | 'linear' | 'notion' | 'mcp';
+  remote?: RemoteDefinition;
   scope?: 'personal' | 'team';
   teamId?: string;
   label: string;

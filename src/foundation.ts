@@ -179,6 +179,9 @@ export interface SyncDatabase {
 export class Store {
   constructor(public db: SyncDatabase) {
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS company_connectors(id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),name TEXT NOT NULL,catalog_id TEXT,config TEXT NOT NULL,fingerprint TEXT NOT NULL,status TEXT NOT NULL,tools TEXT NOT NULL,candidate TEXT NOT NULL,UNIQUE(org_id,id));
+      CREATE TABLE IF NOT EXISTS connection_connectors(connection_id TEXT PRIMARY KEY,org_id TEXT NOT NULL,connector_id TEXT NOT NULL,FOREIGN KEY(org_id,connection_id) REFERENCES connections(org_id,id),FOREIGN KEY(org_id,connector_id) REFERENCES company_connectors(org_id,id));
+      CREATE TABLE IF NOT EXISTS connector_requests(id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),requester_id TEXT NOT NULL,name TEXT NOT NULL,catalog_id TEXT,endpoint TEXT,reason TEXT NOT NULL,status TEXT NOT NULL,note TEXT NOT NULL,connector_id TEXT,created_at INTEGER NOT NULL,FOREIGN KEY(org_id,requester_id) REFERENCES members(org_id,user_id));
       CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, until INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, google_sub TEXT UNIQUE, email TEXT NOT NULL, name TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS organizations (id TEXT PRIMARY KEY, name TEXT NOT NULL, lease_hours INTEGER NOT NULL DEFAULT 168, grant_hours INTEGER NOT NULL DEFAULT 168, revision INTEGER NOT NULL DEFAULT 1);
@@ -271,7 +274,22 @@ export class Store {
     return Math.min(c.expires_at, c.created_at + this.org(c.org_id).lease_hours * 3600_000);
   }
   live(c: Connection) {
-    insist(['slack', 'notion', 'linear'].includes(c.provider), 'Provider no longer supported', 410);
+    insist(
+      ['slack', 'notion', 'linear', 'mcp'].includes(c.provider),
+      'Provider no longer supported',
+      410,
+    );
+    insist(
+      c.provider !== 'mcp' ||
+        (c.provider === 'mcp' &&
+          this.get(
+            "SELECT 1 FROM connection_connectors b JOIN company_connectors d ON d.id=b.connector_id AND d.org_id=b.org_id WHERE b.connection_id=? AND b.org_id=? AND d.status='enabled'",
+            c.id,
+            c.org_id,
+          )),
+      'Connector is not enabled by your company',
+      410,
+    );
     insist(
       c.status === 'active' && this.expires(c) > Date.now(),
       'Connection expired or revoked. Reconnect to continue.',

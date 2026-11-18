@@ -1,3 +1,4 @@
+import { executeRemote, remoteJSON } from './remote-mcp.js';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -26,6 +27,7 @@ export interface OAuthAttempt {
   redirect: string;
   expiresAt: number;
   oauth?: LocalConnection['oauth'];
+  remote?: LocalConnection['remote'];
 }
 export const challenge = (verifier: string) =>
   createHash('sha256').update(verifier).digest('base64url');
@@ -47,6 +49,22 @@ export async function authorizeURL(a: OAuthAttempt) {
     code_challenge: challenge(a.verifier),
     code_challenge_method: 'S256',
   });
+  if (a.provider === 'mcp') {
+    const o = a.remote?.config.oauth;
+    insist(o, 'Missing OAuth configuration', 400);
+    params.set('client_id', o.clientId);
+    params.set(
+      'scope',
+      a.remote?.config.endpoint === 'https://mcp.slack.com/mcp'
+        ? o.scope
+            .split(/[,\s]+/)
+            .filter(Boolean)
+            .join(',')
+        : o.scope,
+    );
+    if (o.resource) params.set('resource', o.resource);
+    return o.authorize + '?' + params;
+  }
   if (a.provider === 'notion') {
     const meta = await requestJSON('https://mcp.notion.com/.well-known/oauth-authorization-server');
     insist(
@@ -88,10 +106,34 @@ export async function authorizeURL(a: OAuthAttempt) {
   return providerConfig[a.provider].authorize + '?' + params;
 }
 export async function exchange(
-  a: Pick<OAuthAttempt, 'provider' | 'clientId' | 'oauth'>,
+  a: Pick<OAuthAttempt, 'provider' | 'clientId' | 'oauth' | 'remote'>,
   fields: Record<string, string>,
 ): Promise<Credentials> {
   const body: Record<string, string> = { ...fields, client_id: a.clientId };
+  if (a.provider === 'mcp') {
+    const o = a.remote?.config.oauth;
+    insist(o, 'Missing OAuth configuration', 400);
+    body.client_id = o.clientId;
+    if (o.resource) body.resource = o.resource;
+    const data = await remoteJSON(o.token, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(body).toString(),
+    });
+    insist(
+      !data.error && data.ok !== false,
+      'Provider rejected OAuth. Check the Slack app approval, PKCE setting and callback URL.',
+      502,
+    );
+    return {
+      access_token: z.string().min(1).max(16000).parse(data.access_token),
+      refresh_token: z.string().max(16000).optional().parse(data.refresh_token),
+      expires_at:
+        data.expires_in === undefined
+          ? undefined
+          : Date.now() + z.coerce.number().positive().finite().parse(data.expires_in) * 1000,
+    };
+  }
   if (a.provider === 'notion') {
     body.resource = 'https://mcp.notion.com/mcp';
     if (a.oauth?.clientSecret) body.client_secret = a.oauth.clientSecret;
@@ -131,7 +173,11 @@ export async function exchange(
   };
 }
 export async function refresh(c: LocalConnection) {
-  insist(Object.hasOwn(providerConfig, c.provider), 'Provider no longer supported', 410);
+  insist(
+    c.provider === 'mcp' || Object.hasOwn(providerConfig, c.provider),
+    'Provider no longer supported',
+    410,
+  );
   if (!c.credentials.expires_at || c.credentials.expires_at > Date.now() + 60000) return;
   if (!c.credentials.refresh_token) throw new OAuthExpired();
   const previous = c.credentials.refresh_token;
@@ -183,19 +229,21 @@ export async function revoke(c: LocalConnection): Promise<'confirmed' | 'manual_
 }
 export async function executeLocal(
   c: LocalConnection,
-  tool: ToolName,
+  tool: string,
   args: Record<string, unknown>,
   beforeDispatch: () => Promise<void>,
 ) {
   insist(c.status === 'active' && c.expiresAt > Date.now(), 'Local connection expired');
+  if (c.provider === 'mcp') return executeRemote(c, tool, args, beforeDispatch);
+  const builtinTool = tool as ToolName;
   insist(
-    Object.hasOwn(catalog, tool) && catalog[tool].provider === c.provider,
+    Object.hasOwn(catalog, tool) && catalog[builtinTool].provider === c.provider,
     'Wrong connection for tool',
   );
-  const parsed = catalog[tool].schema.parse(args);
+  const parsed = catalog[builtinTool].schema.parse(args);
   if (c.provider !== 'notion') {
     await beforeDispatch();
-    return executeProvider(c.provider, c.credentials.access_token, tool, parsed);
+    return executeProvider(c.provider, c.credentials.access_token, builtinTool, parsed);
   }
   const client = new Client({ name: 'argos-personal', version: '0.1.0' });
   const transport = new StreamableHTTPClientTransport(new URL('https://mcp.notion.com/mcp'), {

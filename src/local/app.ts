@@ -1,3 +1,4 @@
+import { remoteConfigSchema, configFingerprint } from '../remote-definition.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { resolve } from 'node:path';
 import { z } from 'zod';
@@ -47,6 +48,12 @@ export function createLocalApp(runtime: LocalRuntime, origin: string, assets: st
       return res.status(400).type('text').send('Authorization was cancelled. Return to Argos.');
     const code = z.string().min(1).max(4096).parse(req.query.code);
     if (a.oauth) insist(req.query.iss === a.oauth.issuer, 'OAuth issuer mismatch', 400);
+    if (a.remote && req.query.iss)
+      insist(
+        new URL(String(req.query.iss)).href === a.remote.config.oauth?.issuer,
+        'OAuth issuer mismatch',
+        400,
+      );
     await runtime.serial(async () => {
       const p = runtime.storage.get(a.profileId);
       await runtime.snapshot(p);
@@ -67,7 +74,13 @@ export function createLocalApp(runtime: LocalRuntime, origin: string, assets: st
         autoRead: false,
         status: 'active',
         oauth: a.oauth,
+        ...(a.remote ? { remote: a.remote } : {}),
       });
+      if (a.remote)
+        await runtime.discover(
+          p,
+          p.connections.find((c) => c.id === a.connectionId)!,
+        );
     });
     res
       .type('text')
@@ -123,6 +136,78 @@ export function createLocalApp(runtime: LocalRuntime, origin: string, assets: st
         const url = await authorizeURL(a);
         attempts.set(a.state, a);
         return { url };
+      }),
+    );
+  });
+  app.post('/api/connect-mcp', async (req, res) => {
+    const b = z
+      .object({
+        profileId: z.string().uuid(),
+        connectorId: z.string().uuid(),
+        token: z.string().max(16000).optional(),
+      })
+      .strict()
+      .parse(req.body);
+    res.json(
+      await runtime.serial(async () => {
+        const p = runtime.storage.get(b.profileId);
+        await runtime.snapshot(p);
+        insist(runtime.snapshots.get(p.id)?.status === 'active', 'Pair this device first');
+        const d = runtime.companyConnectors.get(p.id)?.find((d) => d.id === b.connectorId);
+        insist(d && d.status !== 'disabled', 'Company connector unavailable', 404);
+        d.config = remoteConfigSchema.parse(d.config);
+        insist(configFingerprint(d.config) === d.fingerprint, 'Connector configuration mismatch');
+        if (d.config.auth === 'oauth') {
+          insist(!b.token, 'Do not supply a token for OAuth', 400);
+          for (const [key, a] of attempts) if (a.expiresAt < Date.now()) attempts.delete(key);
+          insist(attempts.size < 10, 'Too many pending connections', 429);
+          const a = newAttempt(
+            p.id,
+            'mcp',
+            id(),
+            d.name,
+            d.config.oauth!.clientId,
+            origin + '/oauth/callback',
+          );
+          a.remote = d;
+          const url = await authorizeURL(a);
+          attempts.set(a.state, a);
+          return { url };
+        }
+        insist(
+          d.config.auth === 'bearer' ? !!b.token : !b.token,
+          'Enter a token only when the connector requires one',
+          400,
+        );
+        const c = {
+          id: id(),
+          provider: 'mcp' as const,
+          label: d.name,
+          clientId: '',
+          remote: d,
+          credentials: { access_token: b.token ?? '' },
+          expiresAt: Date.now() + 7 * 86400000,
+          autoRead: false,
+          status: 'active' as const,
+        };
+        await runtime.register(p, c);
+        return runtime.discover(p, c);
+      }),
+    );
+  });
+  app.post('/api/discover-mcp', async (req, res) => {
+    const b = z
+      .object({ profileId: z.string().uuid(), id: z.string().uuid() })
+      .strict()
+      .parse(req.body);
+    res.json(
+      await runtime.serial(async () => {
+        const p = runtime.storage.get(b.profileId);
+        await runtime.snapshot(p);
+        insist(runtime.snapshots.get(p.id)?.status === 'active', 'Device is offline');
+        const c = p.connections.find((c) => c.id === b.id);
+        insist(c, 'Connection not found', 404);
+        return runtime.discover(p, c);
       }),
     );
   });

@@ -1,3 +1,5 @@
+import { CompanyConnectors, configFingerprintForTools } from '../src/company-connectors.js';
+import { remoteToolName } from '../src/remote-definition.js';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { generateKeyPairSync, randomBytes, sign } from 'node:crypto';
@@ -469,6 +471,80 @@ it('rejects retired providers from previously installed clients', async () => {
       id: id(),
       provider: 'engram',
       label: 'Retired memory',
+    }),
+  ).rejects.toThrow();
+});
+
+it('keeps custom MCP credentials local through signed registration, policy and execution', async () => {
+  const registry = new CompanyConnectors(store);
+  const definition = registry.create(p, {
+    name: 'CRM',
+    config: { endpoint: 'https://mcp.example.com/mcp', auth: 'bearer' },
+  });
+  const tools = [
+    {
+      name: 'find',
+      description: 'Search CRM',
+      inputSchema: {
+        type: 'object',
+        properties: { query: { type: 'string' } },
+        required: ['query'],
+      },
+    },
+  ];
+  await remote(profile, '/api/local/connector-tools', {
+    connectorId: definition.id,
+    fingerprint: definition.fingerprint,
+    tools,
+  });
+  const c: LocalConnection = {
+    id: id(),
+    provider: 'mcp',
+    label: 'Personal CRM',
+    remote: { ...definition, tools },
+    credentials: { access_token: 'custom-mcp-secret-stays-local' },
+    clientId: '',
+    expiresAt: Date.now() + 60000,
+    status: 'active',
+    autoRead: true,
+  };
+  await runtime.register(profile, c);
+  const tool = remoteToolName(definition.id, 'find');
+  await expect(
+    app.gateway.invoke(p, c.id, tool, { arguments: { query: 'acme' } }, id()),
+  ).rejects.toThrow();
+  registry.publish(p, definition.id, {
+    enabled: true,
+    names: ['find'],
+    candidateHash: configFingerprintForTools(tools),
+  });
+  const r = await app.gateway.invoke(p, c.id, tool, { arguments: { query: 'acme' } }, id());
+  await app.gateway.decide(p, r.id, true);
+  await runtime.tick();
+  expect(execute).not.toHaveBeenCalled();
+  const action = runtime.snapshots.get(profile.id)!.actions[0];
+  await runtime.decide(profile.id, action.id, action.digest, true);
+  expect(app.gateway.read(p, r.id).status).toBe('completed');
+  expect(execute).toHaveBeenCalledTimes(1);
+  const snapshot = await remote(profile, '/api/local/status');
+  expect(JSON.stringify(snapshot)).not.toContain(c.credentials.access_token);
+  expect(JSON.stringify(store.all('SELECT * FROM connections'))).not.toContain(
+    c.credentials.access_token,
+  );
+  expect(store.get<any>('SELECT secret FROM connections WHERE id=?', c.id).secret).toBeNull();
+});
+it('rejects signed registration with an incorrect custom connector fingerprint', async () => {
+  const definition = new CompanyConnectors(store).create(p, {
+    name: 'CRM',
+    config: { endpoint: 'https://mcp.example.com/mcp', auth: 'none' },
+  });
+  await expect(
+    remote(profile, '/api/local/connections', {
+      id: id(),
+      provider: 'mcp',
+      label: 'Wrong binding',
+      connectorId: definition.id,
+      fingerprint: '0'.repeat(64),
     }),
   ).rejects.toThrow();
 });

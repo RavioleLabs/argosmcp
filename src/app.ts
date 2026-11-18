@@ -1,3 +1,4 @@
+import { CompanyConnectors, toolsFor, matchesTool } from './company-connectors.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import { dashboardAsset } from './dashboard-assets.js';
 import { z } from 'zod';
@@ -131,6 +132,10 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
   });
   auth.mount(app);
   devices.mount(app, auth);
+  new CompanyConnectors(store, { slack: settings.env.SLACK_PUBLIC_CLIENT_ID ?? '' }).mount(
+    app,
+    auth,
+  );
   serverCustody.mount(app, auth, connectors);
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'argosmcp' }));
   app.get('/api/session', (req, res) => {
@@ -207,9 +212,12 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     const p = auth.principal(req),
       org = store.org(p.orgId),
       role = store.member(p).role;
+    const catalog = toolsFor(store, p.orgId);
     const connections = store
       .all<Connection>('SELECT * FROM connections WHERE org_id=? ORDER BY created_at', p.orgId)
-      .filter((c) => ['slack', 'notion', 'linear'].includes(c.provider) && store.canAccess(p, c))
+      .filter(
+        (c) => ['slack', 'notion', 'linear', 'mcp'].includes(c.provider) && store.canAccess(p, c),
+      )
       .map((c) => ({
         id: c.id,
         provider: c.provider,
@@ -228,7 +236,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
             : 'local',
         local: !!store.get('SELECT 1 FROM local_connections WHERE connection_id=?', c.id),
         policies: Object.entries(catalog)
-          .filter(([, t]) => t.provider === c.provider)
+          .filter(([, t]) => matchesTool(store, c, t))
           .map(([key, t]) => ({
             tool: key,
             title: t.title,
@@ -364,11 +372,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       .strict()
       .parse(req.body);
     const c = store.connection(p, input.connectionId);
-    insist(
-      input.tool in catalog && catalog[input.tool as ToolName].provider === c.provider,
-      'Unknown tool',
-      400,
-    );
+    insist(matchesTool(store, c, toolsFor(store, p.orgId)[input.tool]), 'Unknown tool', 400);
     store.db.transaction(() => {
       store.run(
         'INSERT INTO policies VALUES(?,?,?,?) ON CONFLICT(org_id,connection_id,tool) DO UPDATE SET effect=excluded.effect',
@@ -393,7 +397,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       .object({ tool: z.string(), effect: z.enum(['allow', 'approve', 'block']) })
       .strict()
       .parse(req.body);
-    insist(Object.hasOwn(catalog, input.tool), 'Unknown tool', 400);
+    insist(Object.hasOwn(toolsFor(store, p.orgId), input.tool), 'Unknown tool', 400);
     store.db.transaction(() => {
       store.run(
         'INSERT INTO organization_policies VALUES(?,?,?) ON CONFLICT(org_id,tool) DO UPDATE SET effect=excluded.effect',
@@ -421,11 +425,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       .strict()
       .parse(req.body);
     const c = store.connection(p, input.connectionId);
-    insist(
-      Object.hasOwn(catalog, input.tool) && catalog[input.tool as ToolName].provider === c.provider,
-      'Unknown tool',
-      400,
-    );
+    insist(matchesTool(store, c, toolsFor(store, p.orgId)[input.tool]), 'Unknown tool', 400);
     store.db.transaction(() => {
       if (input.effect === 'inherit')
         store.run(
@@ -673,27 +673,34 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     );
     function available() {
       const g = store.grant(p.grantId!);
-      return store
-        .all<Connection>('SELECT * FROM connections WHERE org_id=?', p.orgId)
-        .filter(
-          (c) =>
-            (!provider || c.provider === provider) &&
-            store.canAccess(p, c) &&
-            JSON.parse(g.connections).includes(c.id) &&
-            c.status === 'active' &&
-            store.expires(c) > Date.now(),
-        );
+      return store.all<Connection>('SELECT * FROM connections WHERE org_id=?', p.orgId).filter(
+        (c) =>
+          (!provider || c.provider === provider) &&
+          store.canAccess(p, c) &&
+          JSON.parse(g.connections).includes(c.id) &&
+          c.status === 'active' &&
+          store.expires(c) > Date.now() &&
+          (() => {
+            try {
+              store.live(c);
+              return true;
+            } catch {
+              return false;
+            }
+          })(),
+      );
     }
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       const connections = available();
-      const tools = Object.entries(catalog)
+      const tools = Object.entries(toolsFor(store, p.orgId))
         .filter(([tool, def]) =>
           connections.some(
-            (c) => c.provider === def.provider && gateway.policy(c, tool, p) !== 'block',
+            (c) => matchesTool(store, c, def) && gateway.policy(c, tool, p) !== 'block',
           ),
         )
         .map(([tool, def]) => {
-          const schema = z.toJSONSchema(def.schema, { target: 'draft-7', io: 'input' }) as any;
+          const schema = (def.inputSchema ??
+            z.toJSONSchema(def.schema, { target: 'draft-7', io: 'input' })) as any;
           return {
             name: tool,
             description:
@@ -708,7 +715,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
                   type: 'string',
                   enum: connections
                     .filter(
-                      (c) => c.provider === def.provider && gateway.policy(c, tool, p) !== 'block',
+                      (c) => matchesTool(store, c, def) && gateway.policy(c, tool, p) !== 'block',
                     )
                     .map((c) => c.id),
                 },
@@ -729,7 +736,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
           ...tools,
           {
             name: 'argos_connections',
-            description: 'List your authorized service and memory contexts.',
+            description: 'List your authorized service connections.',
             inputSchema: { type: 'object', properties: {}, additionalProperties: false },
           },
           {

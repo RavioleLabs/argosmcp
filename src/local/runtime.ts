@@ -1,3 +1,9 @@
+import {
+  remoteToolDefinition,
+  remoteToolName,
+  type RemoteDefinition,
+} from '../remote-definition.js';
+import { discoverRemote } from './remote-mcp.js';
 import { generateKeyPairSync } from 'node:crypto';
 import { catalog, OAuthExpired, type ToolName } from '../connectors.js';
 import { canonical, hash, id, insist, Fault } from '../foundation.js';
@@ -8,6 +14,8 @@ import { executeLocal, refresh, revoke, redactResult } from './providers.js';
 
 export class LocalRuntime {
   snapshots = new Map<string, { status: string; actions: LocalAction[]; error?: string }>();
+  companyConnectors = new Map<string, RemoteDefinition[]>();
+  administrators = new Set<string>();
   teams = new Map<string, { id: string; name: string }[]>();
   private tail: Promise<unknown> = Promise.resolve();
   constructor(
@@ -88,6 +96,9 @@ export class LocalRuntime {
       this.storage.save(p);
     }
     this.teams.set(p.id, data.teams ?? []);
+    this.companyConnectors.set(p.id, data.connectors ?? []);
+    if (data.administrator) this.administrators.add(p.id);
+    else this.administrators.delete(p.id);
     insist(
       Array.isArray(data.connections) && Array.isArray(data.actions),
       'Invalid workspace response',
@@ -105,6 +116,7 @@ export class LocalRuntime {
           const registered = await this.send(p, '/api/local/connections', {
             id: c.id,
             provider: c.provider,
+            ...(c.remote ? { connectorId: c.remote.id, fingerprint: c.remote.fingerprint } : {}),
             label: c.label,
             ...(c.scope ? { scope: c.scope } : {}),
             ...(c.teamId ? { teamId: c.teamId } : {}),
@@ -132,6 +144,27 @@ export class LocalRuntime {
     });
     this.snapshots.set(p.id, { status: 'active', actions });
   }
+  definition(c: LocalConnection, name: string) {
+    if (c.provider === 'mcp') {
+      const t = c.remote?.tools.find((t) => remoteToolName(c.remote!.id, t.name) === name);
+      return t ? remoteToolDefinition(c.remote!, t) : undefined;
+    }
+    const d = Object.hasOwn(catalog, name) ? catalog[name as ToolName] : undefined;
+    return d?.provider === c.provider ? d : undefined;
+  }
+  async discover(p: Profile, c: LocalConnection) {
+    insist(c.remote && c.status === 'active', 'MCP connection unavailable');
+    const tools = await discoverRemote(c.remote.config, c.credentials.access_token);
+    c.remote.tools = tools;
+    this.storage.save(p);
+    if (this.administrators.has(p.id))
+      await this.send(p, '/api/local/connector-tools', {
+        connectorId: c.remote.id,
+        fingerprint: c.remote.fingerprint,
+        tools,
+      });
+    return { count: tools.length, reviewRequired: this.administrators.has(p.id) };
+  }
   validate(p: Profile, a: LocalAction) {
     const c = p.connections.find((c) => c.id === a.connectionId);
     insist(
@@ -144,11 +177,8 @@ export class LocalRuntime {
         a.expiresAt > Date.now(),
       'Action identity or expiration mismatch',
     );
-    insist(
-      Object.hasOwn(catalog, a.tool) && catalog[a.tool as ToolName].provider === c.provider,
-      'Tool not allowed on this connection',
-    );
-    const args = catalog[a.tool as ToolName].schema.parse(a.args);
+    insist(!!this.definition(c, a.tool), 'Tool not allowed on this connection');
+    const args = this.definition(c, a.tool)!.schema.parse(a.args);
     insist(
       a.digest ===
         hash(
@@ -182,7 +212,7 @@ export class LocalRuntime {
         await this.snapshot(p);
         for (const a of this.snapshots.get(p.id)?.actions ?? []) {
           const c = this.validate(p, a);
-          if (a.status === 'approved' && c.autoRead && !catalog[a.tool as ToolName].write)
+          if (a.status === 'approved' && c.autoRead && !this.definition(c, a.tool)!.write)
             await this.execute(p, a, false);
         }
       } catch {
@@ -214,7 +244,7 @@ export class LocalRuntime {
   async execute(p: Profile, a: LocalAction, userConfirmed: boolean) {
     const c = this.validate(p, a);
     insist(
-      userConfirmed || (c.autoRead && !catalog[a.tool as ToolName].write),
+      userConfirmed || (c.autoRead && !this.definition(c, a.tool)!.write),
       'Local confirmation required',
     );
     try {
@@ -282,6 +312,7 @@ export class LocalRuntime {
     const result = await this.send(p, '/api/local/connections', {
       id: c.id,
       provider: c.provider,
+      ...(c.remote ? { connectorId: c.remote.id, fingerprint: c.remote.fingerprint } : {}),
       label: c.label,
       ...(c.scope ? { scope: c.scope } : {}),
       ...(c.teamId ? { teamId: c.teamId } : {}),
@@ -312,6 +343,8 @@ export class LocalRuntime {
       pairUrl: p.pairUrl,
       identity: p.identity,
       teams: this.teams.get(p.id) ?? [],
+      connectors: this.companyConnectors.get(p.id) ?? [],
+      administrator: this.administrators.has(p.id),
       ...(this.snapshots.get(p.id) ?? { status: 'offline', actions: [] }),
       connections: p.connections.map((c) => ({
         id: c.id,
