@@ -1,3 +1,4 @@
+import { CloudflarePortals } from './cloudflare-portals.js';
 import { CompanyConnectors, toolsFor, matchesTool } from './company-connectors.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import { dashboardAsset } from './dashboard-assets.js';
@@ -152,6 +153,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     auth,
   );
   serverCustody.mount(app, auth, connectors);
+  new CloudflarePortals(store, settings).mount(app, auth);
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'argosmcp' }));
   app.get('/api/session', (req, res) => {
     const userId = auth.session(req);
@@ -295,7 +297,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       deployment: {
         hosting:
           settings.env.ARGOS_DEPLOYMENT === 'argos-cloud'
-            ? 'argos-cloud'
+            ? 'managed-cloudflare'
             : settings.hosted
               ? 'company-cloudflare'
               : 'self-hosted',
@@ -305,6 +307,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       connections,
       serverCustody: {
         available: serverCustody.available,
+        directConnectionsAllowed: settings.env.ARGOS_ALLOW_DIRECT_SERVER_CUSTODY === '1',
         enabled: serverCustody.enabled(p.orgId),
         providers: ['slack', 'notion', 'linear'].map((provider) => ({
           provider,

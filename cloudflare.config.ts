@@ -21,6 +21,8 @@ export default defineConfig({
     env: {
       WORKSPACES: bindings.durableObject({ worker: 'argosmcp', exportName: 'CompanyWorkspace' }),
       ACCOUNTS: bindings.durableObject({ worker: 'argosmcp', exportName: 'AccountDirectory' }),
+      ARGOS_MANAGED_PORTAL_DOMAIN: bindings.secret(),
+      ARGOS_PROVISIONED_PORTALS_JSON: bindings.secret(),
       ARGOS_DEPLOYMENT: bindings.secret(),
       ARGOS_DASHBOARD_URL: bindings.secret(),
       ARGOS_DASHBOARD_VERSION: bindings.secret(),

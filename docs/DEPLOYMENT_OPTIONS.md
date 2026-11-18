@@ -1,16 +1,16 @@
 # Argos deployment and credential storage
 
-Backend hosting and credential storage are independent choices. Local custody is recommended in every hosting model. The same company policies, scoped AI grants, lease limits and action approvals apply to requests that pass through Argos.
+See [Cloudflare portal setup and current delivery status](CLOUDFLARE_PORTALS.md). Backend hosting and credential storage are independent choices. Local custody is recommended in every hosting model. The same company policies, scoped AI grants, lease limits and action approvals apply to requests that pass through Argos.
 
 | Backend | Operator | Local connections | Server connections | Dashboard |
 | --- | --- | --- | --- | --- |
-| Argos Cloud | Argos, on Cloudflare | Recommended | Optional, explicit consent | Included |
+| Managed Argos backend | Argos, on Cloudflare | Recommended | Optional, explicit consent | Included |
 | Company Cloudflare | Your company | Recommended | Optional, in your account | Delivered at your backend origin |
 | Self-hosted Docker or Node | Your company | Recommended | Optional, on your host | Delivered at your backend origin |
 
 The backend and local connector runtime are MIT open source. The separately maintained dashboard and native presentation are proprietary. Their public compiled assets do not make their source open source. Existing MIT history remains MIT.
 
-## Argos Cloud
+## Managed Argos backend
 
 Open https://argosmcp.leraviole.workers.dev/, sign in with Google, create a workspace and invite colleagues. Each company has a separate Cloudflare Durable Object database. Membership, connector definitions, team scopes, devices, policies and grants are checked within that company. Infrastructure operators still control the application and encryption keys.
 
@@ -19,11 +19,11 @@ Open https://argosmcp.leraviole.workers.dev/, sign in with Google, create a work
 3. Add the workspace's `/mcp` URL to your AI client. Use the exact company URL, including `/w/<UUID>` when present.
 4. Review actions in Argos. Keep the personal computer online for local connections.
 
-Server custody is an alternative, not a migration of local tokens: the operator provisions a dedicated provider vault, an administrator enables it in **Security**, and each user explicitly consents before connecting an account on the backend. Local connections stay local.
+Cloudflare portal access is an alternative, not a migration of local tokens: the operator provisions a dedicated encrypted store for portal access, an administrator enables it in **Security**, and each user explicitly consents before connecting an account on the backend. Local connections stay local.
 
 ## Company Cloudflare
 
-Your administrator deploys from their own computer into their own Cloudflare account. Do not upload a Cloudflare account API key to Argos Cloud. Argos does not need an administrative Cloudflare role.
+Your administrator deploys from their own computer into their own Cloudflare account. Do not upload a Cloudflare account API key to Managed Argos backend. Argos does not need an administrative Cloudflare role.
 
 1. Check out a reviewed backend release and install the supported Node version and dependencies with `npm ci`.
 2. Sign in with the included CLI: `npx cf auth login`, then `npx cf auth whoami`. Verify the selected account before deployment. Use a separate CLI profile for each company. Do not deploy over an existing unrelated Worker named `argosmcp`.
@@ -45,7 +45,7 @@ Your administrator deploys from their own computer into their own Cloudflare acc
 6. Configure the Worker custom domain in that same account and verify DNS/TLS. The origin must exactly match the configured tenant and Google redirect. A `workers.dev` origin is also usable if configured consistently from the beginning. The company controls its Cloudflare billing and any plan prerequisites.
 7. Open the backend, sign in, invite the team and pair devices. Review the deployment label and server-custody state in **Security**.
 
-Cloudflare hosting does not automatically configure MCP Portals. The Worker already supports direct provider connections and approved generic remote MCP servers. Portals are a separate optional upstream service.
+Cloudflare Worker hosting does not automatically create MCP Portals. Follow [the portal setup guide](CLOUDFLARE_PORTALS.md) for managed or company-owned portals. Local connections remain direct; new cloud connections require a linked company portal.
 
 ## Self-hosted
 
@@ -53,7 +53,9 @@ Follow [SELF_HOSTING.md](SELF_HOSTING.md) for Docker Compose or Node, HTTPS, Goo
 
 The dashboard runs at your backend origin. Its API calls, login cookies and tool payloads are not relayed through the Argos asset publisher. Pin `ARGOS_DASHBOARD_VERSION` to a reviewed immutable release. The publisher remains a trusted software supplier: executing its JavaScript at your origin gives that code access to the user session. Owning the account alone is not a zero-knowledge guarantee.
 
-## Connect a remote MCP on the backend
+## Legacy direct remote MCP on the backend
+
+The following is compatibility documentation for existing connections or operators explicitly enabling `ARGOS_ALLOW_DIRECT_SERVER_CUSTODY=1`. The current dashboard routes new cloud connections through [company Cloudflare portals](CLOUDFLARE_PORTALS.md).
 
 1. An administrator creates a connector with its public HTTPS Streamable HTTP endpoint and authentication settings. OAuth uses a pre-registered public client, PKCE S256 and pinned authorization/token/issuer URLs. Obtain these from the provider; do not guess endpoints or paste a client secret.
 2. Register the backend callback `<workspace URL>/oauth/callback/mcp`. A local connection instead uses the callback shown by Argos Personal. Both redirect URLs may need registration. A provider requiring a confidential client, automatic DCR, custom authentication headers or interactive MCP elicitation is not supported by this generic flow. The built-in Notion adapter has its own DCR support.

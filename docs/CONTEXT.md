@@ -1,5 +1,10 @@
 # ArgosMCP · product decisions
 
+## Current connection modes (18 November 2026)
+
+Local remains recommended and connects directly from Argos Personal to providers. New cloud connections use a company Cloudflare MCP Portal, either in Argos’s account or the company’s account. Backend hosting is independent: managed Argos on Cloudflare, company Cloudflare, or MIT self-hosted Docker/Node. Cloudflare holds cloud provider tokens; the Argos backend holds encrypted portal access that its operator can use. Existing direct server connections are retained for explicit migration, not silently transferred. See [the portal setup and delivery status](CLOUDFLARE_PORTALS.md). Earlier dated notes below describe the implementation history.
+
+
 Recorded 2026-11-17 from Emeric's instructions. This file preserves the scope across sessions.
 
 ## Current scope, superseding the historical Engram decisions below

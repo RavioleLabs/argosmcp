@@ -1,5 +1,10 @@
 # Security model
 
+## Current connection modes (18 November 2026)
+
+Local remains recommended and connects directly from Argos Personal to providers. New cloud connections use a company Cloudflare MCP Portal, either in Argos’s account or the company’s account. Backend hosting is independent: managed Argos on Cloudflare, company Cloudflare, or MIT self-hosted Docker/Node. Cloudflare holds cloud provider tokens; the Argos backend holds encrypted portal access that its operator can use. Existing direct server connections are retained for explicit migration, not silently transferred. See [the portal setup and delivery status](docs/CLOUDFLARE_PORTALS.md). Earlier dated notes below describe the implementation history.
+
+
 The [18 November 2026 security review](docs/SECURITY_REVIEW_2026-11-18.md) records scope, mitigations, scanner limitations and outstanding finance/crypto release gates. An unrestricted agent running as the credential owner is not isolated from the local client. Previews must not be advertised as tamper-proof, independently audited or suitable for custody of financial assets.
 
 ## The boundary

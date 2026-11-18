@@ -213,6 +213,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, org_id TEXT NOT NULL, actor_id TEXT NOT NULL, event TEXT NOT NULL, entity_id TEXT NOT NULL, created_at INTEGER NOT NULL, previous_hash TEXT NOT NULL, entry_hash TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS audit_org ON audit(org_id,seq);
       CREATE TABLE IF NOT EXISTS invitations (id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES organizations(id), email TEXT NOT NULL, role TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS cloudflare_portals (org_id TEXT PRIMARY KEY REFERENCES organizations(id),mode TEXT NOT NULL,endpoint TEXT NOT NULL,connector_id TEXT,status TEXT NOT NULL,plan TEXT NOT NULL,created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS custody_settings (org_id TEXT PRIMARY KEY REFERENCES organizations(id),enabled INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS server_credentials (connection_id TEXT PRIMARY KEY REFERENCES connections(id),secret TEXT);
       CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, public_key TEXT NOT NULL, label TEXT NOT NULL, org_id TEXT, user_id TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, last_seen INTEGER);
