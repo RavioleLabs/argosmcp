@@ -349,3 +349,9 @@ it('refuses changed remote schemas before claiming or invoking a tool', async ()
   expect(claimed).toBe(false);
   expect(calls.some((m) => m.method === 'tools/call')).toBe(false);
 });
+it('refuses Cloudflare Code Mode tools that hide individual upstream actions', () => {
+  for (const name of ['portal_codemode_search', 'portal_codemode_execute'])
+    expect(() =>
+      parseTools([{ name, description: 'Fixture', inputSchema: { type: 'object' } }]),
+    ).toThrow('Code Mode');
+});

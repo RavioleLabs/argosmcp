@@ -1,7 +1,8 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
 // Configure without printing credentials. Supply an official Google OAuth client JSON file.
-const [originArg, ownerEmail, googleFile] = process.argv.slice(2);
+process.umask(0o077);
+const [originArg, ownerEmail, googleFile, company = 'My company'] = process.argv.slice(2);
 if (!originArg || !ownerEmail || !googleFile) {
   console.error(
     'Usage: node scripts/configure-hosted.mjs https://company.example.com owner@example.com /path/to/google-client.json',
@@ -34,20 +35,22 @@ if (tenants[originArg] && tenants[originArg].ownerEmail !== ownerEmail.toLowerCa
   );
 tenants[originArg] ??= {
   id: randomUUID(),
-  name: process.env.ARGOS_COMPANY_NAME ?? 'RavioleLabs',
+  name: process.env.ARGOS_COMPANY_NAME ?? company,
   ownerEmail: ownerEmail.toLowerCase(),
 };
 secrets.ARGOS_TENANTS_JSON = JSON.stringify(tenants);
 secrets.ARGOS_VAULT_KEYRING ??= JSON.stringify({ v1: randomBytes(32).toString('base64') });
 secrets.ARGOS_DASHBOARD_URL ??= 'https://argos-dashboard.leraviole.workers.dev';
 secrets.ARGOS_DASHBOARD_VERSION ??= '';
-secrets.ARGOS_SERVER_CUSTODY ??= '1';
+secrets.ARGOS_SERVER_CUSTODY ??= '0';
+secrets.ARGOS_DEPLOYMENT ??= 'company-cloudflare';
 secrets.ARGOS_PROVIDER_VAULT_KEYRING ??= JSON.stringify({ v1: randomBytes(32).toString('base64') });
 secrets.SLACK_PUBLIC_CLIENT_ID ??= '';
 secrets.LINEAR_PUBLIC_CLIENT_ID ??= '';
 secrets.GOOGLE_CLIENT_ID = google.client_id;
 secrets.GOOGLE_CLIENT_SECRET = google.client_secret;
 writeFileSync(path, JSON.stringify(secrets, null, 2), { mode: 0o600 });
+chmodSync(path, 0o600);
 console.log(
   'Workspace configuration saved locally. Existing encryption keys and company IDs preserved.',
 );

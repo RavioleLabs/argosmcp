@@ -88,6 +88,7 @@ export interface Tenant {
   ownerSub?: string;
 }
 export interface Settings {
+  remoteFetch?: (input: string | URL, init?: RequestInit) => Promise<Response>;
   basePath?: string;
   platformSession?: boolean;
   selfService?: boolean;
@@ -185,6 +186,9 @@ export class Store {
       CREATE TABLE IF NOT EXISTS connection_connectors(connection_id TEXT PRIMARY KEY,org_id TEXT NOT NULL,connector_id TEXT NOT NULL,FOREIGN KEY(org_id,connection_id) REFERENCES connections(org_id,id),FOREIGN KEY(org_id,connector_id) REFERENCES company_connectors(org_id,id));
       CREATE TABLE IF NOT EXISTS connector_requests(id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),requester_id TEXT NOT NULL,name TEXT NOT NULL,catalog_id TEXT,endpoint TEXT,reason TEXT NOT NULL,status TEXT NOT NULL,note TEXT NOT NULL,connector_id TEXT,created_at INTEGER NOT NULL,FOREIGN KEY(org_id,requester_id) REFERENCES members(org_id,user_id));
       CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, until INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS security_controls (org_id TEXT PRIMARY KEY REFERENCES organizations(id), independent_writes INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS security_control_changes (id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES organizations(id), requester_id TEXT NOT NULL, enabled INTEGER NOT NULL, revision INTEGER NOT NULL, expires_at INTEGER NOT NULL, status TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS invocation_reviews (invocation_id TEXT NOT NULL REFERENCES invocations(id), user_id TEXT NOT NULL, digest TEXT NOT NULL, revision INTEGER NOT NULL, shared INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(invocation_id,user_id));
       CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, google_sub TEXT UNIQUE, email TEXT NOT NULL, name TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS organizations (id TEXT PRIMARY KEY, name TEXT NOT NULL, lease_hours INTEGER NOT NULL DEFAULT 168, grant_hours INTEGER NOT NULL DEFAULT 168, revision INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE IF NOT EXISTS members (org_id TEXT REFERENCES organizations(id), user_id TEXT REFERENCES users(id), role TEXT NOT NULL CHECK(role IN ('owner','admin','member')), PRIMARY KEY(org_id,user_id));

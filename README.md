@@ -49,7 +49,7 @@ The presentation bundle is downloaded explicitly by `local:setup`; it is not upd
 
 New workspaces open **Getting started**. The guide explains the browser dashboard and companion app before asking users to install anything, then walks through installation, pairing, a first tool and MCP client authorization. It remains available in the sidebar. Each teammate follows it with their own account and computer.
 
-[Download Argos Personal for Apple silicon](https://github.com/RavioleLabs/argosmcp/releases/download/personal-v0.1.1-preview.1/Argos-Personal-macOS-arm64.zip) (macOS 26 or later, preview). Unzip, move the app to Applications, and open it. This is an ad-hoc signed build, **not Apple-notarized**; Gatekeeper may block it. A signed public installer is not available yet. [Release details and SHA-256 checksum](https://github.com/RavioleLabs/argosmcp/releases/tag/personal-v0.1.1-preview.1). Intel Macs, Windows and Linux currently require the source installation above.
+[Download Argos Personal for Apple silicon](https://github.com/RavioleLabs/argosmcp/releases/download/personal-v0.1.5-preview.1/Argos-Personal-macOS-arm64.zip) (macOS 26 or later, preview). Unzip, move the app to Applications, and open it. This is an ad-hoc signed build, **not Apple-notarized**; Gatekeeper may block it. A signed public installer is not available yet. [Release details and SHA-256 checksum](https://github.com/RavioleLabs/argosmcp/releases/tag/personal-v0.1.5-preview.1). Intel Macs, Windows and Linux currently require the source installation above.
 
 ### Pair and connect
 
@@ -136,3 +136,7 @@ Argos is an access-control gateway, not a memory or RAG service. Built-in Engram
 Open **Connections** to discover vendor MCP servers, configure company connectors or request a new integration. Administrators review discovered tools before enabling them; members connect their own accounts in Argos Personal. The directory includes Google Workspace, Attio, BonDossier, Slack's official MCP and other vendors, with setup requirements and source links. Listing does not imply every vendor is activated or tested with a real account.
 
 See [company setup, Slack OAuth and security boundaries](docs/COMPANY_CONNECTORS.md) and the [sourced directory](docs/CONNECTOR_DIRECTORY.md). Custom MCP connections currently use local token custody and the aggregate `/mcp` endpoint.
+
+## Hosting and storage choices
+
+Use Argos Cloud, your company Cloudflare account, or the MIT backend on Docker/Node. Local credentials remain recommended in each case. Optional server connections support approved remote MCP endpoints and the built-in connectors. Read the [deployment guide](docs/DEPLOYMENT_OPTIONS.md) for setup, independent review and the configuration-dependent Cloudflare MCP Portals path.

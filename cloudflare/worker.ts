@@ -1,3 +1,4 @@
+import { cloudflareRemoteFetch } from './remote-fetch.js';
 import { DurableObject } from 'cloudflare:workers';
 import { handleAsNodeRequest } from 'cloudflare:node';
 import { createServer } from 'node:http';
@@ -138,6 +139,7 @@ export class CompanyWorkspace extends DurableObject<Env> {
       platformSession: dynamic,
       selfService: true,
       hosted: true,
+      remoteFetch: cloudflareRemoteFetch,
       demo: false,
       dataDir: '',
       env: secrets,

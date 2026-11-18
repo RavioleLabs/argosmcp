@@ -18,6 +18,7 @@ export default defineConfig({
       config: true,
       miniflare: {
         bindings: {
+          ARGOS_DEPLOYMENT: 'company-cloudflare',
           ARGOS_TENANTS_JSON: JSON.stringify(tenants),
           ARGOS_SERVER_CUSTODY: '1',
           ARGOS_PROVIDER_VAULT_KEYRING: JSON.stringify({

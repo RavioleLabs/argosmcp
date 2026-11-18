@@ -135,8 +135,8 @@ export async function safeFetch(input: string | URL, init: RequestInit = {}): Pr
     req.end(init.body || undefined);
   });
 }
-export async function remoteJSON(url: string, init: RequestInit) {
-  const r = await safeFetch(url, init);
+export async function remoteJSON(url: string, init: RequestInit, send = safeFetch) {
+  const r = await send(url, init);
   if (!r.ok) {
     await r.body?.cancel();
     throw new Fault(502, 'OAuth request failed. Check the provider configuration or reconnect.');

@@ -30,6 +30,7 @@ import {
   type ToolName,
 } from './connectors.js';
 import { Gateway } from './gateway.js';
+import { SecurityControls } from './security-controls.js';
 import { ServerCustody } from './server-custody.js';
 import { Devices } from './devices.js';
 
@@ -54,6 +55,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     });
   connectors.server = serverCustody;
   const devices = new Devices(store, vault, gateway, workspaceURL(settings));
+  const securityControls = new SecurityControls(store);
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.set({
@@ -289,6 +291,17 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     res.json({
       org,
       role,
+      securityControls: securityControls.view(p),
+      deployment: {
+        hosting:
+          settings.env.ARGOS_DEPLOYMENT === 'argos-cloud'
+            ? 'argos-cloud'
+            : settings.hosted
+              ? 'company-cloudflare'
+              : 'self-hosted',
+        workspaceUrl: workspaceURL(settings),
+        recommendedCustody: 'local',
+      },
       connections,
       serverCustody: {
         available: serverCustody.available,
@@ -348,6 +361,14 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     );
     store.audit(p, 'organization.security_updated', p.orgId);
     res.json({ ok: true });
+  });
+  app.post('/api/org/:orgId/security/changes', (req, res) => {
+    const input = z.object({ enabled: z.boolean() }).strict().parse(req.body);
+    res.json(securityControls.request(auth.principal(req), input.enabled));
+  });
+  app.post('/api/org/:orgId/security/changes/:id', (req, res) => {
+    const input = z.object({ approve: z.boolean() }).strict().parse(req.body);
+    res.json(securityControls.decide(auth.principal(req), String(req.params.id), input.approve));
   });
   function validScope(p: Principal, scope: string, teamId?: string | null) {
     if (scope !== 'personal') store.admin(p);
@@ -467,8 +488,17 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
     res.json({ ok: true });
   });
   app.post('/api/org/:orgId/approvals/:id', async (req, res) => {
-    const input = z.object({ approve: z.boolean() }).strict().parse(req.body);
-    res.json(await gateway.decide(auth.principal(req), String(req.params.id), input.approve));
+    const input = z
+      .object({
+        approve: z.boolean(),
+        digest: z.string().length(64).optional(),
+        shareForReview: z.boolean().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    res.json(
+      await gateway.decide(auth.principal(req), String(req.params.id), input.approve, input),
+    );
   });
   app.post('/api/org/:orgId/invoke', async (req, res) => {
     const input = z

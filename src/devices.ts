@@ -256,6 +256,7 @@ export class Devices {
           `${r.org_id}:invocation:${r.id}`,
         );
         actions.push({
+          independentReview: this.gateway.independent(r.org_id, r.tool),
           id: r.id,
           orgId: p.orgId,
           userId: r.user_id,

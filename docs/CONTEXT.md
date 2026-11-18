@@ -86,3 +86,13 @@ Argos must not be limited to native Slack, Notion and Linear adapters. Provide a
 ## Security priority, 18 November 2026
 
 Emeric requested security as the central product differentiator for finance and crypto. Same-user autonomous agents are explicitly in the threat model. Do not claim that a local executable/hash check isolates such an agent. See SECURITY_REVIEW_2026-11-18.md for implemented mitigations and separate future release gates: isolated executor, independent strong approvals, financial signing separation, audited distribution and independent review.
+
+## 2026-11-18: hosting paths and independent action review
+
+Emeric reauthorized implementation with “vasy build tout”. Offer Argos-managed Cloudflare, company-owned Cloudflare and the MIT self-hosted backend. Recommend local custody in all three; optional server custody remains gated by operator setup, company opt-in and per-user consent. Never collect a customer's Cloudflare account admin token in the SaaS.
+
+Added generic server-side remote MCP OAuth PKCE/bearer/public connections, administrator tool discovery/publication, exact-definition checks before dispatch, and a Cloudflare public-fetch transport. Company connectors are personal credentials; enabling a connector is separate from connecting each member's account. Portal access is itself a credential even when Cloudflare holds upstream tokens. Reject documented Cloudflare Code Mode tools. No real portal is activated: account portal list was empty and argosnode.ai DNS delegation remained pending.
+
+Optional independent action review requires two distinct reviewers on writes, with explicit owner consent before personal action arguments are shared to another administrator. Enabling/disabling requires a second admin. Local app directs pending independent reviews to the dashboard and still requires final local confirmation. No attestation or human-presence claim.
+
+Dashboard provides hosting comparison during workspace creation/onboarding and in Security, displays current deployment, explains custody and links the operational guide. See DEPLOYMENT_OPTIONS.md for the exact support boundaries.

@@ -73,3 +73,17 @@ Final staged Gitleaks initially flagged ordinary prose about signing in this rep
 - Backend Worker 67e25be4-8e8a-4984-9e83-5cb240488688 at https://argosmcp.leraviole.workers.dev.
 - Live read-only checks passed for health, anonymous session, public OAuth discovery, pinned dashboard HTML and the JavaScript containing the 0.1.4 download link. Missing publisher assets return 404 with no-store. Public metadata stays anonymous/cross-origin; private API resources are same-origin.
 - Native update is published, not installed over the user's existing application. Existing accounts, paired devices and real provider tokens were not changed by the test campaign.
+
+## Hosting and independent-review follow-up
+
+Added three explicit hosting paths with local custody recommended, optional generic remote MCP server execution, Cloudflare public-only bounded transport, pinned OAuth endpoints/PKCE, and refusal of the documented portal Code Mode executors. Remote schemas are compared before dispatch; credentials never appear in company connector definitions. Generic remote provider revocation remains manual and is reported accordingly.
+
+The opt-in independent-review mode requires two distinct reviewers for writes and two administrators to change the mode. Personal argument sharing requires explicit owner consent, and reviewers do not gain connection/result access. Approval identity, revision, expiry and argument digest are checked again. This is not proof of a human, executable attestation or protection against a malicious host administrator.
+
+Validation: 120 backend tests, 19 Cloudflare runtime tests and 6 dashboard tests (145 total); TypeScript checks and both deployment dry-runs passed. Semgrep follow-up found zero findings/errors in backend, Workers and scripts. Staged Gitleaks found no secrets. Native environment injection, launch URL and bundle validation passed on 0.1.5 build 6, followed by strict recursive signature verification. The preview is still ad-hoc signed and not notarized. ZIP SHA-256: a8f9e026cbbee96a4d98b2e57e1cc8205254dda61674e3fc5368e0f724c7e007.
+
+Visual checks used an isolated, in-memory demo with external provider calls disabled. Hosting comparison, company connectors and server-storage consent rendered correctly. No existing production company's custody setting or credentials were changed. Real Cloudflare Portal OAuth remains unverified: the account has no portal and argosnode.ai DNS delegation is pending. The previous ZAP results above apply to the earlier security release, not a new ZAP scan of this follow-up.
+
+Follow-up publication: backend source cf5c54b (PR #4), private dashboard 5ef55d6 (PR #4). Dashboard release 73b2640381540fdd is pinned in production; publisher Worker aba7fb4a-10db-4167-91b3-ef138cf6a727 and backend Worker 4f977740-0ff3-4b32-ba60-a0e5e812f215 were deployed. Live health, anonymous session, OAuth discovery, dashboard HTML/assets and the new native download link returned successfully. Missing publisher assets remain 404/no-store. GitHub's uploaded ZIP digest matches the local 0.1.5 checksum. The installed user app was not replaced.
+
+Backend Verify and Static security scan CI succeeded on this code, as did the push-triggered Windows credential storage run (44354042445). The disposable UI preview on ports 4288/4289 was stopped. A stale browser tab reported Failed to fetch after shutdown; the published dashboard now gives an explicit unreachable-backend explanation rather than this raw browser error.
