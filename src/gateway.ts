@@ -11,6 +11,7 @@ import {
   type Invocation,
 } from './foundation.js';
 import { type ToolName, type Connectors } from './connectors.js';
+import { SecurityControls } from './security-controls.js';
 
 export class Gateway {
   constructor(
@@ -18,6 +19,28 @@ export class Gateway {
     private vault: Vault,
     public connectors: Pick<Connectors, 'execute'>,
   ) {}
+  private reviewedArguments(r: Invocation) {
+    const args = this.vault.open<Record<string, unknown>>(
+      r.payload,
+      `${r.org_id}:invocation:${r.id}`,
+    );
+    insist(
+      r.digest ===
+        hash(
+          canonical({
+            org: r.org_id,
+            user: r.user_id,
+            grant: r.grant_id ?? null,
+            connectionId: r.connection_id,
+            tool: r.tool,
+            args,
+          }),
+        ),
+      'Action arguments changed',
+      409,
+    );
+    return args;
+  }
   companyPolicy(orgId: string, tool: string): 'allow' | 'approve' | 'block' {
     return (
       this.store.get<{ effect: 'allow' | 'approve' | 'block' }>(
@@ -53,8 +76,72 @@ export class Gateway {
       )?.effect ?? 'allow';
     const personal = p ? this.personalRestriction(p, c.id, tool) : 'inherit';
     // Permissions intersect. No personal or connection override can relax enterprise policy.
-    const all = [company, connection, personal];
+    const all = [
+      company,
+      connection,
+      personal,
+      this.independent(c.org_id, tool) ? 'approve' : 'allow',
+    ];
     return all.includes('block') ? 'block' : all.includes('approve') ? 'approve' : 'allow';
+  }
+  independent(orgId: string, tool: string) {
+    return (
+      new SecurityControls(this.store).enabled(orgId) &&
+      toolsFor(this.store, orgId)[tool]?.write === true
+    );
+  }
+  private sharedForReview(r: Invocation, c: Connection) {
+    if (!this.store.canAccess({ orgId: c.org_id, userId: c.owner_id }, c)) return false;
+    return !!this.store.get(
+      'SELECT 1 FROM invocation_reviews WHERE invocation_id=? AND user_id=? AND digest=? AND revision=? AND shared=1',
+      r.id,
+      c.owner_id,
+      r.digest,
+      r.revision,
+    );
+  }
+  private canReview(p: Principal, c: Connection, r: Invocation): boolean {
+    if (p.grantId || p.orgId !== c.org_id) return false;
+    try {
+      if (this.canApprove(p, c)) return true;
+      return (
+        this.independent(r.org_id, r.tool) &&
+        c.scope === 'personal' &&
+        p.userId !== c.owner_id &&
+        ['owner', 'admin'].includes(this.store.member(p).role) &&
+        this.sharedForReview(r, c)
+      );
+    } catch {
+      return false;
+    }
+  }
+  private reviews(r: Invocation, c: Connection) {
+    return this.store
+      .all<{ user_id: string; digest: string; revision: number }>(
+        'SELECT * FROM invocation_reviews WHERE invocation_id=?',
+        r.id,
+      )
+      .filter(
+        (v) =>
+          v.digest === r.digest &&
+          v.revision === r.revision &&
+          this.canReview({ orgId: r.org_id, userId: v.user_id }, c, r),
+      );
+  }
+  private validApproval(r: Invocation, c: Connection) {
+    if (!this.independent(r.org_id, r.tool)) {
+      try {
+        return !!r.approver_id && this.canApprove({ orgId: r.org_id, userId: r.approver_id }, c);
+      } catch {
+        return false;
+      }
+    }
+    const votes = this.reviews(r, c);
+    return (
+      votes.length >= 2 &&
+      votes.some((v) => v.user_id !== r.user_id) &&
+      (c.scope !== 'personal' || votes.some((v) => v.user_id === c.owner_id))
+    );
   }
   authorize(p: Principal, connectionId: string, tool: string) {
     const c = this.store.connection(p, connectionId);
@@ -189,7 +276,17 @@ export class Gateway {
           p.orgId,
           r.connection_id,
         )!;
-        return this.canApprove(p, c);
+        if (!this.canReview(p, c, r)) return false;
+        try {
+          this.authorize(
+            { orgId: r.org_id, userId: r.user_id, ...(r.grant_id ? { grantId: r.grant_id } : {}) },
+            c.id,
+            r.tool,
+          );
+          return r.revision === this.store.org(r.org_id).revision;
+        } catch {
+          return false;
+        }
       })
       .map((r) => ({
         id: r.id,
@@ -198,7 +295,23 @@ export class Gateway {
         userId: r.user_id,
         createdAt: r.created_at,
         expiresAt: r.expires_at,
-        args: this.vault.open(r.payload, `${r.org_id}:invocation:${r.id}`),
+        digest: r.digest,
+        independentReview: this.independent(r.org_id, r.tool),
+        approvalsReceived: this.reviews(
+          r,
+          this.store.get<Connection>('SELECT * FROM connections WHERE id=?', r.connection_id)!,
+        ).length,
+        alreadyReviewed: !!this.store.get(
+          'SELECT 1 FROM invocation_reviews WHERE invocation_id=? AND user_id=?',
+          r.id,
+          p.userId,
+        ),
+        sharingRequired:
+          this.independent(r.org_id, r.tool) &&
+          this.store.get<Connection>('SELECT * FROM connections WHERE id=?', r.connection_id)
+            ?.scope === 'personal' &&
+          !this.store.get('SELECT 1 FROM invocation_reviews WHERE invocation_id=?', r.id),
+        args: this.reviewedArguments(r),
       }));
   }
   private canApprove(p: Principal, c: Connection) {
@@ -209,7 +322,12 @@ export class Gateway {
         : ['owner', 'admin'].includes(this.store.member(p).role))
     );
   }
-  async decide(p: Principal, invocationId: string, approve: boolean) {
+  async decide(
+    p: Principal,
+    invocationId: string,
+    approve: boolean,
+    review?: { digest?: string; shareForReview?: boolean },
+  ) {
     this.store.db.transaction(() => {
       const r = this.store.get<Invocation>(
         'SELECT * FROM invocations WHERE org_id=? AND id=?',
@@ -217,13 +335,46 @@ export class Gateway {
         invocationId,
       );
       insist(r, 'Approval not found', 404);
-      const c = this.store.connection(p, r.connection_id);
-      insist(this.canApprove(p, c), 'You cannot approve this context');
+      const c = this.store.get<Connection>(
+        'SELECT * FROM connections WHERE id=? AND org_id=?',
+        r.connection_id,
+        p.orgId,
+      )!;
+      insist(c && this.canReview(p, c, r), 'You cannot approve this context');
       insist(
         r.status === 'pending' && r.expires_at > Date.now(),
         'Approval expired or already decided',
         409,
       );
+      if (this.independent(r.org_id, r.tool) && approve) {
+        this.reviewedArguments(r);
+        insist(
+          review?.digest === r.digest,
+          'Review the exact action in the dashboard before approving',
+          409,
+        );
+        insist(
+          r.revision === this.store.org(p.orgId).revision,
+          'Company policy changed. Request again.',
+          409,
+        );
+        if (c.scope === 'personal' && p.userId === c.owner_id)
+          insist(
+            review.shareForReview === true,
+            'Explicit consent to share these action arguments for independent review is required',
+            409,
+          );
+        this.store.run(
+          'INSERT OR IGNORE INTO invocation_reviews VALUES(?,?,?,?,?)',
+          r.id,
+          p.userId,
+          r.digest,
+          r.revision,
+          c.scope === 'personal' && p.userId === c.owner_id ? 1 : 0,
+        );
+        this.store.audit(p, 'approval.reviewed', r.id);
+        if (!this.validApproval(r, c)) return;
+      }
       this.store.run(
         'UPDATE invocations SET status=?,approver_id=? WHERE id=?',
         approve ? 'approved' : 'rejected',
@@ -232,7 +383,12 @@ export class Gateway {
       );
       this.store.audit(p, approve ? 'approval.approved' : 'approval.rejected', r.id);
     })();
-    if (approve) await this.execute(invocationId);
+    if (
+      approve &&
+      this.store.get<Invocation>('SELECT * FROM invocations WHERE id=?', invocationId)?.status ===
+        'approved'
+    )
+      await this.execute(invocationId);
     return this.store.get<{ status: string }>(
       'SELECT status FROM invocations WHERE id=?',
       invocationId,
@@ -271,10 +427,7 @@ export class Gateway {
         409,
       );
       if (this.policy(c, r.tool, p) === 'approve') {
-        insist(
-          r.approver_id && this.canApprove({ orgId: r.org_id, userId: r.approver_id }, c),
-          'Valid human approval required',
-        );
+        insist(this.validApproval(r, c), 'Valid approval required');
       }
       if (this.store.get('SELECT 1 FROM local_connections WHERE connection_id=?', c.id)) return;
       const acquired = this.store.run(
@@ -292,11 +445,7 @@ export class Gateway {
         );
         this.authorize(p, c.id, r.tool);
         if (this.policy(c, r.tool, p) === 'approve')
-          insist(
-            current.approver_id &&
-              this.canApprove({ orgId: p.orgId, userId: current.approver_id }, c),
-            'Approval no longer valid',
-          );
+          insist(this.validApproval(current, c), 'Approval no longer valid');
       });
       this.store.run(
         "UPDATE invocations SET status='completed',result=? WHERE id=?",
@@ -348,10 +497,7 @@ export class Gateway {
       409,
     );
     if (this.policy(c, r.tool, p) === 'approve')
-      insist(
-        r.approver_id && this.canApprove({ orgId: r.org_id, userId: r.approver_id }, c),
-        'Approval no longer valid',
-      );
+      insist(this.validApproval(r, c), 'Approval no longer valid');
     return { r, p, c, args };
   }
 }

@@ -236,6 +236,11 @@ export class LocalRuntime {
       await this.snapshot(p);
       return;
     }
+    insist(
+      !(a.status === 'pending' && a.independentReview),
+      'Open your workspace dashboard to share this action for independent review',
+      409,
+    );
     if (a.status === 'pending')
       await this.send(p, '/api/local/decide', { id: a.id, digest: a.digest, approve: true });
     await this.execute(p, a, true);

@@ -52,3 +52,7 @@ OAuth state is short-lived, encrypted, single-use, and bound to the same signed-
 Persist `/data` and back up the database and both keyrings with restricted access. Losing a key makes its encrypted records unusable; deleting a key does not revoke a token at its provider. Preserve existing key IDs when rotating and migrate records before retiring old keys. The current active key ID is `v1`; do not blindly replace it. Test restoration before relying on backups.
 
 Use least-privilege operator access, timely dependency updates and a reviewed release process. Monitor revocation failures without logging credentials, OAuth callback query strings, action bodies or returned documents. Define retention, deletion and incident response before commercial use. See [SECURITY.md](../SECURITY.md).
+
+## Company Cloudflare and generic MCP connections
+
+See [DEPLOYMENT_OPTIONS.md](DEPLOYMENT_OPTIONS.md) for company-owned Cloudflare deployment, remote MCP OAuth/bearer connections, independent action review and portal integration limits. Server custody is disabled by default for new generated deployments.

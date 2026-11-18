@@ -1,3 +1,5 @@
+import { CompanyConnectors, configFingerprintForTools } from '../src/company-connectors.js';
+import { remoteToolName } from '../src/remote-definition.js';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { once } from 'node:events';
@@ -17,6 +19,50 @@ let server: Server,
 const key = Buffer.alloc(32, 8).toString('base64');
 const realFetch = globalThis.fetch;
 let providerCalls: string[];
+let remoteCalls: string[],
+  remoteChanged = false,
+  onRemoteList: (() => void) | undefined;
+const remoteTools = () => [
+  {
+    name: 'send_message',
+    description: remoteChanged ? 'Changed' : 'Send one message',
+    inputSchema: {
+      type: 'object',
+      properties: { text: { type: 'string' } },
+      required: ['text'],
+      additionalProperties: false,
+    },
+  },
+];
+async function remoteFetch(input: string | URL, init: RequestInit = {}) {
+  remoteCalls.push(String(input));
+  if (String(input).endsWith('/token'))
+    return Response.json({
+      access_token: 'fixture-remote-provider-token',
+      refresh_token: 'fixture-remote-refresh-token',
+      expires_in: 3600,
+    });
+  expect(String(input)).toBe('https://remote.example.com/mcp');
+  if (init.method === 'GET') return new Response(null, { status: 405 });
+  if (init.method === 'DELETE') return new Response(null, { status: 204 });
+  const request = JSON.parse(String(init.body));
+  if (request.id === undefined) return new Response(null, { status: 202 });
+  let result;
+  if (request.method === 'initialize')
+    result = {
+      protocolVersion: '2025-03-26',
+      capabilities: { tools: {} },
+      serverInfo: { name: 'fixture', version: '1' },
+    };
+  else if (request.method === 'tools/list') {
+    onRemoteList?.();
+    result = { tools: remoteTools() };
+  } else if (request.method === 'tools/call') {
+    remoteCalls.push('EXECUTED');
+    result = { content: [{ type: 'text', text: 'fixture-remote-provider-token' }] };
+  } else throw Error('Unexpected MCP method');
+  return Response.json({ jsonrpc: '2.0', id: request.id, result });
+}
 beforeEach(async () => {
   store = new Store();
   server = createServer();
@@ -30,6 +76,9 @@ beforeEach(async () => {
   cookie = opaque();
   memberCookie = opaque();
   providerCalls = [];
+  remoteCalls = [];
+  remoteChanged = false;
+  onRemoteList = undefined;
   for (const uid of [owner, member])
     store.run('INSERT INTO users VALUES(?,?,?,?)', uid, uid, uid + '@example.test', 'Fixture');
   for (const oid of [org, other])
@@ -42,6 +91,7 @@ beforeEach(async () => {
     origin,
     demo: false,
     dataDir: '/tmp',
+    remoteFetch,
     env: {
       ARGOS_SERVER_CUSTODY: '1',
       ARGOS_PROVIDER_VAULT_KEYRING: JSON.stringify({ v1: key }),
@@ -259,4 +309,145 @@ it('rechecks company policy after a token refresh before dispatching the provide
   expect(refreshing).toBe(true);
   expect(providerCalls).not.toContain('https://slack.com/api/conversations.history');
   expect(app.gateway.read(p, action.id).status).toBe('unknown');
+});
+
+async function remote(auth: 'oauth' | 'bearer' | 'none' = 'oauth') {
+  await enabled();
+  const config = {
+    endpoint: 'https://remote.example.com/mcp',
+    auth,
+    ...(auth === 'oauth'
+      ? {
+          oauth: {
+            issuer: 'https://remote.example.com/',
+            authorize: 'https://remote.example.com/authorize',
+            token: 'https://remote.example.com/token',
+            clientId: 'fixture-public-client',
+          },
+        }
+      : {}),
+  };
+  const d = new CompanyConnectors(store).create(
+    { orgId: org, userId: owner },
+    { name: 'Fixture portal', config },
+  );
+  const response = await api(base() + '/connect/mcp', {
+    label: 'My portal',
+    connectorId: d.id,
+    acknowledgeServerCustody: true,
+    ...(auth === 'bearer' ? { token: 'fixture-remote-provider-token' } : {}),
+  });
+  expect(response.status).toBe(200);
+  if (auth === 'oauth') {
+    const url = new URL((await response.json()).url);
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+    const callback =
+      '/oauth/callback/mcp?state=' + url.searchParams.get('state') + '&code=fixture-code';
+    const binding = response.headers.get('set-cookie')!.split(';')[0];
+    expect(
+      (
+        await api(callback, undefined, 'GET', memberCookie, {
+          Cookie: 'argos_session=' + memberCookie + '; ' + binding,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await api(callback, undefined, 'GET', cookie, {
+          Cookie: 'argos_session=' + cookie + '; ' + binding,
+        })
+      ).status,
+    ).toBe(302);
+    expect(
+      (
+        await api(callback, undefined, 'GET', cookie, {
+          Cookie: 'argos_session=' + cookie + '; ' + binding,
+        })
+      ).status,
+    ).toBe(400);
+  }
+  const p = { orgId: org, userId: owner },
+    company = new CompanyConnectors(store);
+  const discovered = company.get(p, d.id);
+  expect(discovered.candidate).toEqual(remoteTools());
+  company.publish(p, d.id, {
+    enabled: true,
+    names: ['send_message'],
+    candidateHash: configFingerprintForTools(discovered.candidate),
+  });
+  const c = store.get<Connection>(
+    "SELECT * FROM connections WHERE org_id=? AND provider='mcp'",
+    org,
+  )!;
+  return { p, d, c, tool: remoteToolName(d.id, 'send_message') };
+}
+it.each(['oauth', 'bearer', 'none'] as const)(
+  'connects remote MCP using %s, binds personal access and gates one exact upstream call',
+  async (auth) => {
+    const { p, c, tool } = await remote(auth);
+    await expect(
+      app.gateway.invoke(
+        { orgId: org, userId: member },
+        c.id,
+        tool,
+        { arguments: { text: 'hello' } },
+        id(),
+      ),
+    ).rejects.toThrow();
+    const action = await app.gateway.invoke(p, c.id, tool, { arguments: { text: 'hello' } }, id());
+    expect(action.status).toBe('pending');
+    expect(remoteCalls).not.toContain('EXECUTED');
+    await app.gateway.decide(p, action.id, true);
+    expect(app.gateway.read(p, action.id).status).toBe('completed');
+    expect(remoteCalls.filter((x) => x === 'EXECUTED')).toHaveLength(1);
+    if (auth !== 'none')
+      expect(JSON.stringify(app.gateway.read(p, action.id))).not.toContain(
+        'fixture-remote-provider-token',
+      );
+    expect(await (await api(base() + '/state')).text()).not.toContain(
+      'fixture-remote-provider-token',
+    );
+    expect(
+      (await api(base() + '/server-connections/' + c.id + '/discover', {}, 'POST', memberCookie))
+        .status,
+    ).toBe(403);
+  },
+);
+it('fails closed on changed upstream tool schemas and on policy races during discovery', async () => {
+  const { p, c, tool } = await remote();
+  let action = await app.gateway.invoke(p, c.id, tool, { arguments: { text: 'hello' } }, id());
+  remoteChanged = true;
+  await app.gateway.decide(p, action.id, true);
+  expect(remoteCalls).not.toContain('EXECUTED');
+  remoteChanged = false;
+  action = await app.gateway.invoke(p, c.id, tool, { arguments: { text: 'hello again' } }, id());
+  onRemoteList = () => store.run('UPDATE organizations SET revision=revision+1 WHERE id=?', org);
+  await app.gateway.decide(p, action.id, true);
+  expect(remoteCalls).not.toContain('EXECUTED');
+});
+it('blocks cross-company connector references, sharing personal MCP accounts and wrong credential modes', async () => {
+  const { d } = await remote('none');
+  for (const input of [{ token: 'unexpected-token' }, { scope: 'organization' }]) {
+    const r = await api(base() + '/connect/mcp', {
+      label: 'Invalid',
+      connectorId: d.id,
+      acknowledgeServerCustody: true,
+      ...input,
+    });
+    expect(r.status).toBe(400);
+  }
+  const otherId = new CompanyConnectors(store).create(
+    { orgId: org, userId: owner },
+    { name: 'Other', config: { endpoint: 'https://remote.example.com/mcp', auth: 'none' } },
+  ).id;
+  store.run('UPDATE company_connectors SET org_id=? WHERE id=?', other, otherId);
+  expect(
+    (
+      await api(base() + '/connect/mcp', {
+        label: 'Invalid',
+        connectorId: otherId,
+        acknowledgeServerCustody: true,
+      })
+    ).status,
+  ).toBe(404);
 });

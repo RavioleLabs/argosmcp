@@ -241,6 +241,12 @@ export class CompanyConnectors {
             ? this.publicClients.slack
             : null,
         },
+        serverConnections: this.store.all<{ id: string; connector_id: string }>(
+          "SELECT c.id,cc.connector_id FROM connections c JOIN server_credentials sc ON sc.connection_id=c.id JOIN connection_connectors cc ON cc.connection_id=c.id WHERE c.org_id=? AND c.owner_id=? AND c.status='active' AND c.expires_at>?",
+          p.orgId,
+          p.userId,
+          Date.now(),
+        ),
         connectors: this.list(p).map((d) => ({
           ...d,
           candidateHash: configFingerprintForTools(d.candidate),

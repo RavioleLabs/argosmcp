@@ -181,7 +181,14 @@ export function parseTools(input: unknown): RemoteTool[] {
     .parse(input);
   insist(new Set(tools.map((t) => t.name)).size === tools.length, 'Duplicate tool names', 400);
   insist(Buffer.byteLength(JSON.stringify(tools)) <= 180000, 'Tool manifest too large', 400);
-  for (const t of tools) inputValidator(t.inputSchema);
+  for (const t of tools) {
+    insist(
+      !t.name.startsWith('portal_codemode_'),
+      'Disable Cloudflare Code Mode and expose individual tools before connecting this portal',
+      400,
+    );
+    inputValidator(t.inputSchema);
+  }
   return tools;
 }
 export function remoteToolDefinition(d: Pick<RemoteDefinition, 'id' | 'name'>, t: RemoteTool) {

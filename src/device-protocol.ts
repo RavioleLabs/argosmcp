@@ -29,6 +29,7 @@ export interface Device {
   last_seen: number | null;
 }
 export interface LocalAction {
+  independentReview?: boolean;
   id: string;
   orgId: string;
   userId: string;

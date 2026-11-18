@@ -1,4 +1,4 @@
-import { executeRemote, remoteJSON } from './remote-mcp.js';
+import { executeRemote, remoteJSON, safeFetch } from './remote-mcp.js';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -108,6 +108,7 @@ export async function authorizeURL(a: OAuthAttempt) {
 export async function exchange(
   a: Pick<OAuthAttempt, 'provider' | 'clientId' | 'oauth' | 'remote'>,
   fields: Record<string, string>,
+  send = safeFetch,
 ): Promise<Credentials> {
   const body: Record<string, string> = { ...fields, client_id: a.clientId };
   if (a.provider === 'mcp') {
@@ -115,11 +116,15 @@ export async function exchange(
     insist(o, 'Missing OAuth configuration', 400);
     body.client_id = o.clientId;
     if (o.resource) body.resource = o.resource;
-    const data = await remoteJSON(o.token, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(body).toString(),
-    });
+    const data = await remoteJSON(
+      o.token,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(body).toString(),
+      },
+      send,
+    );
     insist(
       !data.error && data.ok !== false,
       'Provider rejected OAuth. Check the Slack app approval, PKCE setting and callback URL.',
@@ -172,7 +177,7 @@ export async function exchange(
     scope: typeof data.scope === 'string' ? data.scope : undefined,
   };
 }
-export async function refresh(c: LocalConnection) {
+export async function refresh(c: LocalConnection, send = safeFetch) {
   insist(
     c.provider === 'mcp' || Object.hasOwn(providerConfig, c.provider),
     'Provider no longer supported',
@@ -184,11 +189,13 @@ export async function refresh(c: LocalConnection) {
   const next = await exchange(
     { ...c, provider: c.provider },
     { grant_type: 'refresh_token', refresh_token: previous },
+    send,
   );
   c.credentials = { ...next, refresh_token: next.refresh_token ?? previous };
 }
 export async function revoke(c: LocalConnection): Promise<'confirmed' | 'manual_required'> {
   try {
+    if (c.provider === 'mcp' && c.remote?.config.auth === 'none') return 'confirmed';
     if (!Object.hasOwn(providerConfig, c.provider)) return 'manual_required';
     if (c.provider === 'slack') {
       for (const token of [c.credentials.refresh_token, c.credentials.access_token].filter(
@@ -232,9 +239,10 @@ export async function executeLocal(
   tool: string,
   args: Record<string, unknown>,
   beforeDispatch: () => Promise<void>,
+  send = safeFetch,
 ) {
   insist(c.status === 'active' && c.expiresAt > Date.now(), 'Local connection expired');
-  if (c.provider === 'mcp') return executeRemote(c, tool, args, beforeDispatch);
+  if (c.provider === 'mcp') return executeRemote(c, tool, args, beforeDispatch, send);
   const builtinTool = tool as ToolName;
   insist(
     Object.hasOwn(catalog, tool) && catalog[builtinTool].provider === c.provider,

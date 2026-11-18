@@ -11,6 +11,15 @@ export interface DirectoryEntry {
 const googleSource = 'https://developers.google.com/workspace/guides/configure-mcp-servers';
 export const connectorDirectory: DirectoryEntry[] = [
   {
+    id: 'cloudflare-mcp-portal',
+    name: 'Cloudflare MCP Portal',
+    category: 'Gateways',
+    source:
+      'https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/mcp-portals/',
+    notes:
+      'Bring your own portal HTTPS endpoint and public PKCE client registration. Cloudflare holds upstream provider credentials; Argos holds portal access locally or on your backend. Disable Code Mode and expose individual tools for action approvals. Live portal compatibility must be verified with your configuration.',
+  },
+  {
     id: 'slack',
     name: 'Slack',
     category: 'Communication',
