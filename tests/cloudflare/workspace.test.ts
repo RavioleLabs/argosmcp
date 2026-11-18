@@ -1,3 +1,9 @@
+import {
+  CompanyConnectors,
+  toolsFor,
+  configFingerprintForTools,
+} from '../../src/company-connectors.js';
+import { remoteToolName } from '../../src/remote-definition.js';
 import { env, exports } from 'cloudflare:workers';
 import { runInDurableObject, evictDurableObject, runDurableObjectAlarm } from 'cloudflare:test';
 import { expect, it } from 'vitest';
@@ -141,4 +147,58 @@ it('verifies signed device requests and rejects replay after object eviction', a
   });
   expect(other.status).toBe(401);
   await other.text();
+});
+
+it('persists company connector review and policies in Durable Object SQLite', async () => {
+  const stub = env.WORKSPACES.getByName(alpha),
+    connectorId = await runInDurableObject(stub, (_instance, state) => {
+      const store = new Store(new DurableDatabase(state.storage)),
+        uid = crypto.randomUUID();
+      store.run('INSERT OR IGNORE INTO organizations(id,name) VALUES(?,?)', alpha, 'Alpha');
+      store.run(
+        'INSERT INTO users VALUES(?,?,?,?)',
+        uid,
+        null,
+        'catalog@example.test',
+        'Catalog owner',
+      );
+      store.run("INSERT INTO members VALUES(?,?,'owner')", alpha, uid);
+      const p = { orgId: alpha, userId: uid },
+        registry = new CompanyConnectors(store);
+      const d = registry.create(p, {
+        name: 'Custom CRM',
+        config: { endpoint: 'https://mcp.example.com/mcp', auth: 'none' },
+      });
+      const manifest = [
+        {
+          name: 'search',
+          description: 'Search',
+          inputSchema: {
+            type: 'object',
+            properties: { query: { type: 'string' } },
+            required: ['query'],
+          },
+        },
+      ];
+      registry.discover(p, d.id, d.fingerprint, manifest);
+      registry.publish(p, d.id, {
+        enabled: true,
+        names: ['search'],
+        candidateHash: configFingerprintForTools(manifest),
+      });
+      expect(
+        toolsFor(store, alpha)[remoteToolName(d.id, 'search')].schema.parse({
+          arguments: { query: 'test' },
+        }),
+      ).toEqual({ arguments: { query: 'test' } });
+      expect(toolsFor(store, beta)[remoteToolName(d.id, 'search')]).toBeUndefined();
+      return d.id;
+    });
+  await evictDurableObject(stub);
+  await runInDurableObject(stub, (_instance, state) => {
+    const store = new Store(new DurableDatabase(state.storage));
+    expect(
+      store.get('SELECT status FROM company_connectors WHERE id=?', connectorId),
+    ).toMatchObject({ status: 'enabled' });
+  });
 });

@@ -130,3 +130,9 @@ Server connections support Notion, Slack and Linear after their provider setup. 
 ## Retired memory integration
 
 Argos is an access-control gateway, not a memory or RAG service. Built-in Engram tools, creation forms and `/mcp/engram` are no longer available. Old connections fail closed, including calls from previously installed apps. Existing encrypted memory files and unrelated provider connections are retained. Update Argos Personal to remove the old creation form. External knowledge tools remain subject to Argos policies when supported.
+
+## Official and custom MCP connectors
+
+Open **Connections** to discover vendor MCP servers, configure company connectors or request a new integration. Administrators review discovered tools before enabling them; members connect their own accounts in Argos Personal. The directory includes Google Workspace, Attio, BonDossier, Slack's official MCP and other vendors, with setup requirements and source links. Listing does not imply every vendor is activated or tested with a real account.
+
+See [company setup, Slack OAuth and security boundaries](docs/COMPANY_CONNECTORS.md) and the [sourced directory](docs/CONNECTOR_DIRECTORY.md). Custom MCP connections currently use local token custody and the aggregate `/mcp` endpoint.

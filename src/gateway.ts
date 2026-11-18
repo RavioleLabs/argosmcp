@@ -1,3 +1,4 @@
+import { toolsFor, matchesTool } from './company-connectors.js';
 import {
   Store,
   Vault,
@@ -9,7 +10,7 @@ import {
   type Connection,
   type Invocation,
 } from './foundation.js';
-import { catalog, type ToolName, type Connectors } from './connectors.js';
+import { type ToolName, type Connectors } from './connectors.js';
 
 export class Gateway {
   constructor(
@@ -80,7 +81,7 @@ export class Gateway {
       );
     }
     insist(
-      tool in catalog && catalog[tool as ToolName].provider === c.provider,
+      matchesTool(this.store, c, toolsFor(this.store, p.orgId)[tool]),
       'Tool unavailable for this connection',
       404,
     );
@@ -94,7 +95,7 @@ export class Gateway {
     insist(this.policy(c, tool, p) !== 'block', 'Action blocked by access policy');
     return c;
   }
-  async invoke(p: Principal, connectionId: string, tool: ToolName, input: unknown, key: string) {
+  async invoke(p: Principal, connectionId: string, tool: string, input: unknown, key: string) {
     let c: Connection;
     try {
       c = this.authorize(p, connectionId, tool);
@@ -102,7 +103,7 @@ export class Gateway {
       this.store.audit(p, 'invocation.denied', connectionId);
       throw error;
     }
-    const args = catalog[tool].schema.parse(input);
+    const args = toolsFor(this.store, p.orgId)[tool].schema.parse(input);
     const digest = hash(
       canonical({
         org: p.orgId,

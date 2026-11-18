@@ -1,3 +1,4 @@
+import { CompanyConnectors } from './company-connectors.js';
 import { createPublicKey, verify } from 'node:crypto';
 import type { Express, Request } from 'express';
 import { z } from 'zod';
@@ -131,12 +132,27 @@ export class Devices {
       label: string;
       scope?: 'personal' | 'team';
       teamId?: string;
+      connectorId?: string;
+      fingerprint?: string;
     },
   ) {
-    insist(['slack', 'notion', 'linear'].includes(input.provider), 'Unsupported provider', 400);
+    insist(
+      ['slack', 'notion', 'linear', 'mcp'].includes(input.provider),
+      'Unsupported provider',
+      400,
+    );
     const p = this.principal(d),
       now = Date.now(),
       scope = input.scope ?? 'personal';
+    if (input.provider === 'mcp') {
+      insist(input.connectorId, 'Missing company connector', 400);
+      const definition = new CompanyConnectors(this.store).get(p, input.connectorId);
+      insist(
+        definition.status !== 'disabled' && definition.fingerprint === input.fingerprint,
+        'Company connector configuration mismatch',
+        403,
+      );
+    } else insist(!input.connectorId && !input.fingerprint, 'Unexpected connector binding', 400);
     insist(scope === 'personal', 'Personal provider connections cannot be shared');
     insist(!input.teamId, 'Unexpected team');
     const previous = this.store.get<Connection>('SELECT * FROM connections WHERE id=?', input.id);
@@ -145,6 +161,13 @@ export class Devices {
         previous.org_id === p.orgId &&
           previous.owner_id === p.userId &&
           previous.provider === input.provider &&
+          (input.provider !== 'mcp' ||
+            !!this.store.get(
+              'SELECT 1 FROM connection_connectors WHERE connection_id=? AND org_id=? AND connector_id=?',
+              input.id,
+              p.orgId,
+              input.connectorId,
+            )) &&
           previous.scope === scope &&
           previous.team_id === (input.teamId ?? null) &&
           this.store.get(
@@ -154,7 +177,11 @@ export class Devices {
           ),
         'Connection belongs to another context',
       );
-      this.store.live(previous);
+      insist(
+        previous.status === 'active' && this.store.expires(previous) > Date.now(),
+        'Connection expired or revoked',
+        403,
+      );
       return { id: previous.id, expiresAt: this.store.expires(previous) };
     }
     this.store.db.transaction(() => {
@@ -171,6 +198,13 @@ export class Devices {
         now + this.store.org(p.orgId).lease_hours * 3600000,
       );
       this.store.run('INSERT INTO local_connections VALUES(?,?)', input.id, d.id);
+      if (input.connectorId)
+        this.store.run(
+          'INSERT INTO connection_connectors VALUES(?,?,?)',
+          input.id,
+          p.orgId,
+          input.connectorId,
+        );
       this.store.audit(p, 'connection.local_connected', input.id);
     })();
     return { id: input.id, expiresAt: now + this.store.org(p.orgId).lease_hours * 3600000 };
@@ -249,6 +283,8 @@ export class Devices {
       }
     }
     return {
+      connectors: new CompanyConnectors(this.store).list(p),
+      administrator: this.store.member(p).role !== 'member',
       teams: this.store.all<{ id: string; name: string }>(
         'SELECT t.id,t.name FROM teams t JOIN team_members m ON m.team_id=t.id AND m.org_id=t.org_id WHERE t.org_id=? AND m.user_id=?',
         p.orgId,
@@ -418,7 +454,9 @@ export class Devices {
         b = z
           .object({
             id: z.string().uuid(),
-            provider: z.enum(['slack', 'notion', 'linear']),
+            provider: z.enum(['slack', 'notion', 'linear', 'mcp']),
+            connectorId: z.string().uuid().optional(),
+            fingerprint: z.string().length(64).optional(),
             scope: z.enum(['personal', 'team']).optional(),
             teamId: z.string().uuid().optional(),
             label: z.string().trim().min(1).max(100),
@@ -426,6 +464,21 @@ export class Devices {
           .strict()
           .parse(req.body);
       res.json(this.register(d, b));
+    });
+    app.post('/api/local/connector-tools', (req, res) => {
+      const d = this.proof(req),
+        p = this.principal(d);
+      const b = z
+        .object({
+          connectorId: z.string().uuid(),
+          fingerprint: z.string().length(64),
+          tools: z.unknown(),
+        })
+        .strict()
+        .parse(req.body);
+      res.json(
+        new CompanyConnectors(this.store).discover(p, b.connectorId, b.fingerprint, b.tools),
+      );
     });
     app.post('/api/local/decide', async (req, res) => {
       const d = this.proof(req),

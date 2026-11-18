@@ -78,3 +78,7 @@ Emeric confirmed that Engram is a separate product. Prepare company-scoped perso
 ## Engram independent cloud implementation · 2026-11-18
 
 The separate Engram contexts Worker is now implemented with its own D1 database, dashboard, scoped keys, ingestion and MCP. Public SDK plus a customer-operated Telegram ingestion template are in the Engram public repository. No company-wide Telegram bot is operated by us; customers retain their own tokens. The prepared Argos federation remains future work; this does not change Argos's memory/provider runtime. Emeric prefers Engram’s neural visual identity: connected nodes and context/source/access graphs, with clearly separate audiences. See the Engram contexts service README for actual capabilities and limits.
+
+## 2026-11-18: Open connector directory and official MCPs
+
+Argos must not be limited to native Slack, Notion and Linear adapters. Provide a documented vendor directory including Google Drive, Attio and BonDossier, plus company-defined MCP servers and member requests. Company administrators approve connector availability and tools; users connect their own accounts with OAuth on their devices. Official Slack MCP with OAuth is the preferred Slack path; its app approval, optional DM scopes and Argos policy are separate controls. Keep legacy API connections explicitly separate. See COMPANY_CONNECTORS.md and CONNECTOR_DIRECTORY.md for the implementation and prerequisites. Argos Personal 0.1.3 includes the shared branch logo as its macOS icon and menu bar symbol.
