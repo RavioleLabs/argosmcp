@@ -38,7 +38,7 @@ beforeEach(async () => {
   server = createServer();
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   origin = 'http://127.0.0.1:' + (server.address() as any).port;
-  app = createApp(store, vault, { origin, demo: true, dataDir: '', env: {}, targets: [] });
+  app = createApp(store, vault, { origin, demo: true, dataDir: '', env: {} });
   server.on('request', app.app);
   p = { orgId: id(), userId: id() };
   store.run('INSERT INTO users VALUES(?,?,?,?)', p.userId, null, 'user@example.test', 'User');
@@ -442,137 +442,11 @@ it('stops refresh attempts after invalid_grant without exposing the provider bod
   expect(local.get(profile.id).connections[0].status).toBe('revoked');
   expect(execute).not.toHaveBeenCalled();
 });
-async function memory(teamId?: string) {
-  const c: LocalConnection = {
-    id: id(),
-    provider: 'engram',
-    scope: teamId ? 'team' : 'personal',
-    teamId,
-    label: teamId ? 'Team memory' : 'Personal memory',
-    clientId: '',
-    credentials: { access_token: '' },
-    expiresAt: Date.now() + 86400000,
-    status: 'active',
-    autoRead: false,
-  };
-  await runtime.register(profile, c);
-  return c;
-}
-async function member(teamId?: string) {
-  const userId = id();
-  store.run(
-    'INSERT INTO users VALUES(?,?,?,?)',
-    userId,
-    null,
-    userId + '@example.test',
-    'Teammate',
-  );
-  store.run("INSERT INTO members VALUES(?,?,'member')", p.orgId, userId);
-  if (teamId) store.run('INSERT INTO team_members VALUES(?,?,?)', p.orgId, teamId, userId);
-  return { orgId: p.orgId, userId };
-}
-async function completeMemory(actor: Principal, c: LocalConnection, tool: any, args: any) {
-  const r = await app.gateway.invoke(actor, c.id, tool, args, id());
-  await runtime.snapshot(local.get(profile.id));
-  const a = runtime.snapshots.get(profile.id)!.actions.find((a) => a.id === r.id)!;
-  await runtime.decide(profile.id, r.id, a.digest, true);
-  return app.gateway.read(actor, r.id).result as any;
-}
-it('remembers, retrieves and forgets encrypted personal memory through the real device flow', async () => {
-  const c = await memory(),
-    saved = await completeMemory(p, c, 'engram_remember', {
-      content: 'Project zephyr launches on Thursday',
-      title: 'Release decision',
-    });
-  const found = await completeMemory(p, c, 'engram_recall', { query: 'zephyr' });
-  expect(found.results[0].id).toBe(saved.id);
-  expect(found.results[0].source).toMatch(/^engram:/);
-  expect(execute).not.toHaveBeenCalled();
-  expect(JSON.stringify(local.db.prepare('SELECT * FROM memories').all())).not.toContain('zephyr');
-  await completeMemory(p, c, 'engram_forget', { id: saved.id });
-  expect((await completeMemory(p, c, 'engram_recall', { query: 'zephyr' })).results).toEqual([]);
-});
-it('shares team memory with current team members without exposing personal memory or outcomes', async () => {
-  const team = id();
-  store.run('INSERT INTO teams VALUES(?,?,?)', team, p.orgId, 'Product');
-  store.run('INSERT INTO team_members VALUES(?,?,?)', p.orgId, team, p.userId);
-  const peer = await member(team),
-    outsider = await member();
-  const personal = await memory(),
-    shared = await memory(team);
-  await completeMemory(p, personal, 'engram_remember', { content: 'personal zephyr secret' });
-  await completeMemory(peer, shared, 'engram_remember', { content: 'team zephyr plan' });
-  const found = await completeMemory(peer, shared, 'engram_recall', { query: 'zephyr' });
-  expect(found.results).toHaveLength(1);
-  expect(found.results[0].content).toBe('team zephyr plan');
-  await expect(
-    app.gateway.invoke(peer, personal.id, 'engram_recall', { query: 'zephyr' }, id()),
-  ).rejects.toThrow();
-  await expect(
-    app.gateway.invoke(outsider, shared.id, 'engram_recall', { query: 'zephyr' }, id()),
-  ).rejects.toThrow();
-  const invocation = store.get<any>(
-    'SELECT id FROM invocations WHERE user_id=? LIMIT 1',
-    peer.userId,
-  );
-  expect(() => app.gateway.read(p, invocation.id)).toThrow();
-});
-it('rechecks team membership after approval and before the local memory operation', async () => {
-  const team = id();
-  store.run('INSERT INTO teams VALUES(?,?,?)', team, p.orgId, 'Product');
-  store.run('INSERT INTO team_members VALUES(?,?,?)', p.orgId, team, p.userId);
-  const peer = await member(team),
-    c = await memory(team);
-  const r = await app.gateway.invoke(
-    peer,
-    c.id,
-    'engram_remember',
-    { content: 'forbidden after removal' },
-    id(),
-  );
-  await app.gateway.decide(p, r.id, true);
-  const digest = store.get<any>('SELECT digest FROM invocations WHERE id=?', r.id).digest;
-  store.run('DELETE FROM team_members WHERE team_id=? AND user_id=?', team, peer.userId);
-  await expect(remote(profile, '/api/local/claim', { id: r.id, digest })).rejects.toThrow();
-  expect(local.db.prepare('SELECT * FROM memories').all()).toHaveLength(0);
-});
-it('requires both administrator role and team membership to host a shared context', async () => {
-  const team = id();
-  store.run('INSERT INTO teams VALUES(?,?,?)', team, p.orgId, 'Private team');
-  await expect(memory(team)).rejects.toThrow();
-  store.run('INSERT INTO team_members VALUES(?,?,?)', p.orgId, team, p.userId);
-  store.run("UPDATE members SET role='member' WHERE org_id=? AND user_id=?", p.orgId, p.userId);
-  await expect(memory(team)).rejects.toThrow();
-});
-it('cannot widen a registered personal connection into a team context', async () => {
-  const c = await memory(),
-    team = id();
-  store.run('INSERT INTO teams VALUES(?,?,?)', team, p.orgId, 'Team');
-  store.run('INSERT INTO team_members VALUES(?,?,?)', p.orgId, team, p.userId);
-  await expect(
-    remote(profile, '/api/local/connections', {
-      id: c.id,
-      provider: 'engram',
-      label: 'Widened',
-      scope: 'team',
-      teamId: team,
-    }),
-  ).rejects.toThrow();
-  await expect(
-    remote(profile, '/api/local/connections', {
-      id: id(),
-      provider: 'slack',
-      label: 'Shared OAuth',
-      scope: 'team',
-      teamId: team,
-    }),
-  ).rejects.toThrow();
-});
 it('keeps a failed registration from blocking existing connections', async () => {
   const good = await connect();
   const denied: LocalConnection = {
     id: id(),
-    provider: 'engram',
+    provider: 'notion',
     scope: 'team',
     teamId: id(),
     label: 'Denied context',
@@ -587,4 +461,14 @@ it('keeps a failed registration from blocking existing connections', async () =>
   expect(runtime.snapshots.get(profile.id)?.status).toBe('active');
   expect(local.get(profile.id).connections.find((c) => c.id === good.id)?.status).toBe('active');
   expect(local.get(profile.id).connections.find((c) => c.id === denied.id)?.status).toBe('revoked');
+});
+
+it('rejects retired providers from previously installed clients', async () => {
+  await expect(
+    remote(profile, '/api/local/connections', {
+      id: id(),
+      provider: 'engram',
+      label: 'Retired memory',
+    }),
+  ).rejects.toThrow();
 });

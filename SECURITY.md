@@ -43,9 +43,9 @@ The local HTTP UI binds only to loopback, checks Host and Origin, uses an HttpOn
 
 Report a vulnerability privately to the deployment owner. Do not include real OAuth tokens in issues or logs. No public security-report address has been configured yet.
 
-## Local memory
+## Retired providers
 
-Engram records are encrypted with context-bound associated data. The context binds canonical workspace URL, company, scope and user/team ID. There is no plaintext search index. Team access is rechecked before dispatch, and results are readable only by the original requester and grant. The host device user can access its team data directly; this is part of the accepted local trust boundary. Removing membership cannot retract copies previously delivered. The built-in backend uses lexical BM25 retrieval, with a 10,000-record limit per context.
+The built-in memory provider is retired. Unsupported providers fail closed before execution, even when an old connection or grant is still present. Old memory data is retained without a new read, write or delete API. Local provider refresh/revocation must never send credentials for an unsupported provider to a fallback endpoint.
 
 ## Dependency audit and telemetry
 

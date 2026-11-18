@@ -11,7 +11,7 @@ The RavioleLabs company configuration has been prepared locally for `https://rav
 3. The Google client configuration was saved locally with mode 600, imported with `scripts/configure-hosted.mjs`, and deployed as Worker secrets. The existing keyring and company UUIDs were preserved. Never paste the secret into chat or commit it.
 4. Complete the DNS migration below, then bind the workspace hostname as a Worker custom domain.
 5. Deploy with the secrets file, without `ARGOS_SETUP_ONLY=1`. Sign in with Google, create a named workspace from the welcome screen, and verify the Owner role before inviting members. Any signed-in account can create its own company.
-6. Pair Argos Personal, compare fingerprints, create an agent grant, and test an Engram context. Real provider connections require separate local consent.
+6. Pair Argos Personal, compare fingerprints, create an agent grant, and test a supported provider connection. Real provider connections require separate local consent.
 
 The ignored configuration also contains an isolated RavioleLabs preview workspace at the workers.dev origin, with a **different company UUID**. This allows testing Google login before the production DNS migration. The preview configuration is deployed. The production hostname still needs its DNS/custom-domain binding. Do not reuse the preview UUID for production.
 
@@ -42,13 +42,13 @@ Workspace URLs are `/w/<UUID>/`; invitation, device pairing, MCP discovery, auth
 
 The macOS app must be rebuilt with this version to accept workspace paths. Existing root-company profiles continue to work. Custom domains and a normal notarized public installer remain separate deployment steps.
 
-## Release verification — 2026-11-18
+## Release verification · 2026-11-18
 
 Self-service release deployed as Worker version `71456e2d-7efd-4df4-b0a1-1f317a39dc6c`. Type checks, 78 Node tests, 15 Workers runtime tests and the web build pass. The rebuilt Argos Personal macOS bundle passes local ad-hoc signature verification.
 
 Public HTTP checks confirm the HTML and bundled assets load, `/api/session` reports Google and self-service enabled, anonymous `/api/workspaces` and `/mcp` return 401, and unknown workspace APIs return 404. The browser was signed in with a non-reserved Google account before deployment, but native browser control stopped exposing page contents after refresh. A real user submitting the new workspace form and reaching the owner dashboard has not yet been observed. This limitation must not be represented as a verified live end-to-end signup.
 
-## Guided installation release — 2026-11-18
+## Guided installation release · 2026-11-18
 
 Worker version `5165124f-32d3-47e2-a3b0-d4ec5719ebb0` deploys the installation guide, the pre-creation explanation of the companion app, and workspace-preserving navigation. The macOS Apple silicon preview is published as GitHub release `personal-v0.1.0-preview.1`, with an archive checksum matching GitHub’s uploaded asset digest. It requires macOS 26 or later and is not notarized.
 

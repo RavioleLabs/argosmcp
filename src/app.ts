@@ -82,7 +82,6 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
         '/mcp/slack',
         '/mcp/notion',
         '/mcp/linear',
-        '/mcp/engram',
       ].includes(req.path)
     ) {
       if (origin !== settings.origin)
@@ -210,7 +209,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       role = store.member(p).role;
     const connections = store
       .all<Connection>('SELECT * FROM connections WHERE org_id=? ORDER BY created_at', p.orgId)
-      .filter((c) => store.canAccess(p, c))
+      .filter((c) => ['slack', 'notion', 'linear'].includes(c.provider) && store.canAccess(p, c))
       .map((c) => ({
         id: c.id,
         provider: c.provider,
@@ -306,15 +305,6 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
         provider,
         configured: connectors.configured(provider),
       })),
-      engramTargets: settings.targets
-        .filter(
-          (t) =>
-            t.orgId === p.orgId &&
-            (t.scope === 'personal'
-              ? t.contextId === p.userId
-              : teams.some((team) => team.id === t.contextId && team.members.includes(p.userId))),
-        )
-        .map((t) => ({ id: t.id, label: t.label, scope: t.scope, contextId: t.contextId })),
     });
   });
   app.put('/api/org/:orgId/settings', async (req, res) => {
@@ -353,12 +343,6 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       );
     else insist(!teamId, 'teamId only applies to team contexts', 400);
   }
-  app.post('/api/org/:orgId/engram', (req, res) => {
-    auth.principal(req);
-    res.status(410).json({
-      error: 'Use a dedicated local Engram context. Server credential custody is disabled.',
-    });
-  });
   app.post('/api/org/:orgId/connections/:id/revoke', async (req, res) => {
     const p = auth.principal(req),
       c = store.connection(p, String(req.params.id));
@@ -647,7 +631,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
   app.all(['/mcp', '/mcp/:provider'], async (req, res) => {
     const provider = req.params.provider ? String(req.params.provider) : null;
     insist(
-      !provider || ['slack', 'notion', 'linear', 'engram'].includes(provider),
+      !provider || ['slack', 'notion', 'linear'].includes(provider),
       'MCP endpoint not found',
       404,
     );
@@ -684,7 +668,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       {
         capabilities: { tools: {} },
         instructions:
-          'All actions are enforced by ArgosMCP. When pending or approved, the personal connector must approve/execute. Show the dashboard approval URL and use argos_result later. An approved action is not yet completed. The device must be online. Never report a pending action as completed. Engram contexts are isolated by connection_id. Use a stable request_id when retrying.',
+          'All actions are enforced by ArgosMCP. When pending or approved, the personal connector must approve/execute. Show the dashboard approval URL and use argos_result later. An approved action is not yet completed. The device must be online. Never report a pending action as completed. Use a stable request_id when retrying.',
       },
     );
     function available() {
@@ -714,7 +698,7 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
             name: tool,
             description:
               def.title +
-              ' — subject to enterprise policy. Use argos_connections to select an authorized context.',
+              ' · subject to enterprise policy. Use argos_connections to select an authorized context.',
             inputSchema: {
               ...schema,
               type: 'object' as const,
@@ -885,8 +869,6 @@ export function seedDemo(store: Store, vault: Vault) {
       ['slack', 'Slack · Raviole Labs', 'organization'],
       ['notion', 'Notion · Documentation', 'team'],
       ['linear', 'Linear · Product', 'team'],
-      ['engram', 'My personal context', 'personal'],
-      ['engram', 'Team memory', 'team'],
     ]) {
       const cid = id(),
         now = Date.now();

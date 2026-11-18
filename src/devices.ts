@@ -133,26 +133,12 @@ export class Devices {
       teamId?: string;
     },
   ) {
+    insist(['slack', 'notion', 'linear'].includes(input.provider), 'Unsupported provider', 400);
     const p = this.principal(d),
       now = Date.now(),
       scope = input.scope ?? 'personal';
-    insist(
-      scope === 'personal' || input.provider === 'engram',
-      'Only memory contexts may be shared',
-    );
-    if (scope === 'team') {
-      this.store.admin(p);
-      insist(
-        input.teamId &&
-          this.store.get(
-            'SELECT 1 FROM team_members WHERE org_id=? AND team_id=? AND user_id=?',
-            p.orgId,
-            input.teamId,
-            p.userId,
-          ),
-        'Join the team before creating its context',
-      );
-    } else insist(!input.teamId, 'Unexpected team');
+    insist(scope === 'personal', 'Personal provider connections cannot be shared');
+    insist(!input.teamId, 'Unexpected team');
     const previous = this.store.get<Connection>('SELECT * FROM connections WHERE id=?', input.id);
     if (previous) {
       insist(
@@ -432,7 +418,7 @@ export class Devices {
         b = z
           .object({
             id: z.string().uuid(),
-            provider: z.enum(['slack', 'notion', 'linear', 'engram']),
+            provider: z.enum(['slack', 'notion', 'linear']),
             scope: z.enum(['personal', 'team']).optional(),
             teamId: z.string().uuid().optional(),
             label: z.string().trim().min(1).max(100),

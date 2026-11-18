@@ -1,6 +1,4 @@
 import { z } from 'zod';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Store, Vault, Fault, insist, type Connection, type Settings } from './foundation.js';
 
 const text = z.string().min(1).max(10000),
@@ -61,30 +59,6 @@ export const catalog = {
         description: z.string().max(10000).default(''),
       })
       .strict(),
-  },
-  engram_recall: {
-    provider: 'engram',
-    title: 'Search this context',
-    write: false,
-    schema: z.object({ query: text, limit: z.number().int().min(1).max(30).default(8) }).strict(),
-  },
-  engram_remember: {
-    provider: 'engram',
-    title: 'Remember in this context',
-    write: true,
-    schema: z
-      .object({
-        content: text,
-        title: z.string().max(250).optional(),
-        tags: z.array(z.string().max(60)).max(20).optional(),
-      })
-      .strict(),
-  },
-  engram_forget: {
-    provider: 'engram',
-    title: 'Forget a memory',
-    write: true,
-    schema: z.object({ id: ref }).strict(),
   },
 } as const;
 export type ToolName = keyof typeof catalog;
@@ -261,69 +235,13 @@ export class Connectors {
         tool,
         context: c.label,
         message: 'Local simulation: no external service called.',
-        ...(tool === 'engram_recall'
-          ? {
-              results: [
-                {
-                  title: 'Architecture ArgosMCP',
-                  snippet:
-                    'Personal and team access are isolated. Every call follows ArgosMCP rules.',
-                  source: 'Demo example',
-                },
-              ],
-            }
-          : {}),
       };
     }
-    if (c.provider === 'engram') return this.engram(c, tool, args);
     const { access_token } = await this.credentials(c);
     const current = this.store.get<Connection>('SELECT * FROM connections WHERE id=?', c.id)!;
     this.store.live(current);
     await beforeDispatch?.();
     return executeProvider(c.provider, access_token, tool, args);
-  }
-  private async engram(c: Connection, tool: ToolName, args: Record<string, any>) {
-    const target = this.settings.targets.find((t) => t.id === c.target_id);
-    // A target MUST be a dedicated Engram store for one context. Never use the existing personal global store for multiple teams.
-    insist(
-      target &&
-        target.orgId === c.org_id &&
-        target.scope === c.scope &&
-        target.contextId === (c.scope === 'personal' ? c.owner_id : c.team_id),
-      'Engram context binding mismatch',
-      403,
-    );
-    const secret = this.vault.open<Credentials>(c.secret!, credentialContext(c));
-    const url = new URL(target.url);
-    insist(
-      url.protocol === 'https:' ||
-        (url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)),
-      'Engram requires HTTPS or a local dedicated instance',
-      400,
-    );
-    const client = new Client({ name: 'argosmcp', version: '0.1.0' });
-    const transport = new StreamableHTTPClientTransport(url, {
-      requestInit: {
-        headers: { Authorization: `Bearer ${secret.access_token}` },
-        redirect: 'error',
-      },
-    });
-    try {
-      await client.connect(transport);
-      const upstream = tool.replace('engram_', '');
-      const result = await client.callTool(
-        {
-          name: upstream,
-          arguments: tool === 'engram_remember' ? { ...args, scope: 'personal' } : args,
-        },
-        undefined,
-        { timeout: 30_000 },
-      );
-      insist(!result.isError, 'Engram rejected the request', 502);
-      return result;
-    } finally {
-      await client.close();
-    }
   }
   revokeLocally(c: Connection) {
     this.store.run(
@@ -353,7 +271,7 @@ export class Connectors {
       );
       return;
     }
-    if (c.demo || c.provider === 'engram') {
+    if (c.demo || !Object.hasOwn(providerConfig, c.provider)) {
       this.store.run(
         'UPDATE connections SET secret=NULL,revoke_status=? WHERE id=?',
         c.demo ? 'simulated' : 'local_only',

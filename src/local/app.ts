@@ -126,35 +126,6 @@ export function createLocalApp(runtime: LocalRuntime, origin: string, assets: st
       }),
     );
   });
-  app.post('/api/memory', async (req, res) => {
-    const b = z
-      .object({
-        profileId: z.string().uuid(),
-        label: z.string().trim().min(1).max(100),
-        scope: z.enum(['personal', 'team']),
-        teamId: z.string().uuid().optional(),
-      })
-      .strict()
-      .parse(req.body);
-    await runtime.serial(async () => {
-      const p = runtime.storage.get(b.profileId);
-      await runtime.snapshot(p);
-      insist(runtime.snapshots.get(p.id)?.status === 'active', 'Pair this device first');
-      await runtime.register(p, {
-        id: id(),
-        provider: 'engram',
-        label: b.label,
-        scope: b.scope,
-        teamId: b.teamId,
-        clientId: '',
-        credentials: { access_token: '' },
-        expiresAt: Date.now() + 7 * 86400000,
-        autoRead: false,
-        status: 'active',
-      });
-    });
-    res.json({ ok: true });
-  });
   app.post('/api/decide', async (req, res) => {
     const b = z
       .object({

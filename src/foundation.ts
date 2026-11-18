@@ -81,15 +81,6 @@ export interface Invocation {
   approver_id: string | null;
   idempotency_key: string;
 }
-export interface EngramTarget {
-  id: string;
-  label: string;
-  url: string;
-  tokenEnv: string;
-  orgId: string;
-  scope: 'personal' | 'team';
-  contextId: string;
-}
 export interface Tenant {
   id: string;
   name: string;
@@ -106,7 +97,6 @@ export interface Settings {
   demo: boolean;
   dataDir: string;
   env: NodeJS.ProcessEnv;
-  targets: EngramTarget[];
 }
 
 // Each value has its own data key. Associated data binds ciphertext to its tenant and record.
@@ -281,6 +271,7 @@ export class Store {
     return Math.min(c.expires_at, c.created_at + this.org(c.org_id).lease_hours * 3600_000);
   }
   live(c: Connection) {
+    insist(['slack', 'notion', 'linear'].includes(c.provider), 'Provider no longer supported', 410);
     insist(
       c.status === 'active' && this.expires(c) > Date.now(),
       'Connection expired or revoked. Reconnect to continue.',

@@ -1,6 +1,12 @@
-# ArgosMCP — product decisions
+# ArgosMCP · product decisions
 
 Recorded 2026-11-17 from Emeric's instructions. This file preserves the scope across sessions.
+
+## Current scope, superseding the historical Engram decisions below
+
+2026-11-18: Emeric removed Engram entirely from the Argos product. Argos focuses on tool connections, enterprise permissions, approvals, expiry and audit. Remove built-in memory and its UI/MCP tools. Do not develop or market an Argos-owned RAG product or Telegram memory pipeline. Existing standalone Engram deployments and stored data are retained pending a separate retirement decision. Third-party knowledge tools can be future integrations, not a reason to build our own memory service. All Argos interface text, including browser titles, must avoid em dashes.
+
+The following notes are historical where they mention Engram.
 
 - Open source MCP gateway, with a paid RavioleLabs-hosted offering. Model-independent: Claude, Codex, Gemini and custom bots that support the protocol.
 - Google OAuth identifies users. Users connect their own Slack, Notion, Linear and other accounts separately. Never pass provider credentials to AI clients.
@@ -25,7 +31,7 @@ Track actual deployment, OAuth setup, provider integration checks, isolation tes
 
 Emeric owns `argosnode.ai`. ArgosMCP is the product; RavioleLabs is only his customer workspace, not the platform-wide tenant. Self-service companies use independent `/w/<UUID>` URLs on the configured platform origin, with one database per company and a private account directory. This removes the need to provision DNS for every customer. Existing reserved root workspaces remain compatible. `raviolelabs.argosnode.ai` is prepared but its DNS migration is pending; Google login currently works at the workers.dev entry point. Company separation is enforced in server authorization and storage; path routing does not create separate browser origins.
 
-## Personal connector — accepted security model
+## Personal connector · accepted security model
 
 - Claude → Argos server → personal connector → provider; results return through Argos to Claude.
 - OAuth access and refresh tokens stay on the user’s device in its OS credential store. No iCloud synchronization by default. Google login to Argos is separate.
@@ -39,28 +45,36 @@ Emeric owns `argosnode.ai`. ArgosMCP is the product; RavioleLabs is only his cus
 
 The personal connector now includes encrypted personal/team memory with explicit remember/recall/forget tools and BM25 retrieval. It is separate from the existing Engram repository. Team requests route to the hosting device; both requester membership and host access are checked at dispatch. No automatic conversation capture, embeddings, or off-device memory replication is claimed.
 
-## Self-service onboarding — 2026-11-18
+## Self-service onboarding · 2026-11-18
 
 A new Google account must be able to create its own company without an invitation or operator intervention. Creating a company establishes its owner; joining an existing company requires an invitation. Users can belong to and switch between several companies. RavioleLabs is one customer workspace, never an implicit membership granted to all users.
 
-## Installation onboarding — 2026-11-18
+## Installation onboarding · 2026-11-18
 
 Explain ArgosMCP (browser workspace and company rules) and Argos Personal (companion app on each user’s computer) before workspace creation. After creation, guide installation, device pairing, provider connection and AI authorization. The Getting started page remains accessible; connection buttons return to the relevant guide instead of an unexplained modal. Progress reflects the signed-in user’s current device, connection and grant, not other members. Keep the workspace URL prefix through navigation and pairing. Never present a download click as successful installation. macOS preview distribution is Apple silicon/macOS 26+, ad-hoc signed and not notarized; the UI must disclose this limitation.
 
-## Why Argos Personal exists — 2026-11-18
+## Why Argos Personal exists · 2026-11-18
 
 Explain the security reason before installation: an OAuth token grants access within its scopes; central custody aggregates users’ tokens and exposure from a vault breach. Argos Personal keeps provider tokens encrypted on individual computers, executes tools after company authorization, and offers local approvals. This reduces centralized token exposure; it does not conceal action arguments/results from Argos or protect a compromised device. Server-managed OAuth storage is technically possible and would allow execution without the user computer online. Emeric wants local custody strongly recommended rather than presenting server custody as impossible. The current product still supports local custody only; no hosted provider vault was implemented or enabled by this copy change.
 
-## Distribution and hosting model — 2026-11-18
+## Distribution and hosting model · 2026-11-18
 
 Emeric clarified: the intended open-source offering is the backend only. The dashboard is a hosted product/service and should also work with an independently self-hosted ArgosMCP backend. Keep backend hosting (managed or self-hosted) independent from token custody (recommended local OS-backed storage, optional server custody to design). Do not imply the hosted dashboard can already connect to arbitrary self-hosted backends. The repository currently includes previously published MIT frontend/native code; do not describe this as an already completed backend-only distribution. Keep subsequent dashboard source changes local until the private-dashboard/public-backend split is implemented; compiled hosted UI may be deployed. Existing published source/history is preserved.
 
 macOS Keychain and Windows Credential Manager protect the local encryption key; provider tokens are encrypted in the local database. Native Windows storage must be checked on Windows, not inferred from passing macOS tests. A Windows installer remains separate from the working Node connector.
 
-## Implementation superseding the earlier pending items — 2026-11-18
+## Implementation superseding the earlier pending items · 2026-11-18
 
 Optional server custody is now implemented behind operator/admin/user opt-ins, with a separate encryption keyring. The public tree now contains only backend/runtime and operational tooling; new dashboard and native presentation source lives in ../argos-dashboard (private). Historic public MIT frontend stays licensed as published.
 
 The hosted dashboard service publishes immutable releases. Self-hosted backends deliver those assets at their own origin, keeping identity/API requests on the company backend. No cross-origin credential relay is introduced. Docker/Compose and a secret-preserving single-company setup command are provided. Local custody remains recommended; native Windows storage is verified, while a native Windows installer is still outstanding. These implementation decisions supersede earlier descriptions of server custody, dashboard self-hosting support and the split as unavailable.
 
 Verification: 86 backend tests and 16 Cloudflare runtime tests pass, including company-bound server OAuth callbacks and policy changes during refresh. The private dashboard has five onboarding tests. A non-root, read-only Docker instance successfully served health and the hosted dashboard, and was stopped after the check. The private publisher is deployed at https://argos-dashboard.leraviole.workers.dev (release `8a12895591aa3e77`); the managed backend is pinned to it, Worker version `7675bbe0-35cb-4ef2-af9a-b311a0c70cf6`. The LeRavio onboarding and disabled-by-default server custody controls were verified in the signed-in browser. The rebuilt Mac app's ad-hoc signature verifies; Developer ID/notarization remain unavailable. No real provider authorization was performed during this delivery.
+
+## Engram Cloud and Telegram preparation · 2026-11-18
+
+Emeric confirmed that Engram is a separate product. Prepare company-scoped personal, team and explicitly company-shared contexts in the existing private engram-cloud project. Support multiple distinct context IDs per team/person. Telegram is a separate bot/connector (with an optional messaging MCP): ingestion writes into approved Engram contexts; agents retrieve Telegram context through Engram with the requesting user's permissions. A bot spanning company sources must not expose a global corpus to every employee. Recheck destination audiences before group delivery; default to private delivery if a complete authorized audience cannot be established. This work is preparation only: no cloud context routes, migrations, Telegram collection or new Argos integration are activated. See docs/ENGRAM_CLOUD_INTEGRATION.md.
+
+## Engram independent cloud implementation · 2026-11-18
+
+The separate Engram contexts Worker is now implemented with its own D1 database, dashboard, scoped keys, ingestion and MCP. Public SDK plus a customer-operated Telegram ingestion template are in the Engram public repository. No company-wide Telegram bot is operated by us; customers retain their own tokens. The prepared Argos federation remains future work; this does not change Argos's memory/provider runtime. Emeric prefers Engram’s neural visual identity: connected nodes and context/source/access graphs, with clearly separate audiences. See the Engram contexts service README for actual capabilities and limits.

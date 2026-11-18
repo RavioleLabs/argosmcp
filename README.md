@@ -24,7 +24,6 @@ This is an independent project at `~/raviolelabs/argosmcp`. It is not part of cl
 - Local approvals showing the agent, company, account, exact arguments and expiry. A dashboard approval alone does not authorize local writes. Reads may be explicitly delegated locally.
 - A final server policy/membership/grant/expiry check immediately before dispatch, atomic one-time claims, and a local durable journal. Ambiguous operations become `unknown`; they are not replayed automatically.
 - Result delivery back through Argos, with known provider credentials redacted. Requests and results are not hidden from the hosted platform.
-- Encrypted Engram contexts on the hosting device, private to one user or shared with current team members. Save, BM25 search with source references, and delete through `/mcp/engram`.
 - Immediate server-side access revocation. Upstream token revocation happens from the online device and may require manual action in provider settings.
 
 ## Start locally
@@ -107,12 +106,6 @@ npm run test:cloudflare
 
 See [SECURITY.md](SECURITY.md) for the trust model and remaining release requirements. Touch ID/passkey gating and hardware attestation are not implemented.
 
-## Engram memory
-
-In Argos Personal → Connections → Create an Engram context, select **Only me** or **My team**. Team contexts require an administrator who belongs to the team. The hosting device must be running for both personal and team requests. Team members use the shared connection through their own scoped Argos agent grants. Removing team membership prevents future retrieval and execution; it cannot erase data already received by an authorized member.
-
-Memory records are individually encrypted on disk. Retrieval decrypts only the selected context, ranks by BM25, and returns source IDs with content for the calling AI. There is no external embedding API or automatic conversation capture. Agents must explicitly call `engram_remember`. This built-in retrieval backend is separate from the existing full Engram repository; it does not copy or modify that code. Contexts are limited to 10,000 records each. Disconnecting a context revokes access without deleting its memory; reconnecting the same personal/team context on the same device restores access after fresh authorization.
-
 ## Configure a hosted workspace
 
 Download the OAuth client JSON for a Google **Web application** registered in your own project. Its authorized redirect must be `<platform origin>/auth/google/callback`. Keep that file out of Git.
@@ -122,7 +115,7 @@ node scripts/configure-hosted.mjs https://raviolelabs.argosnode.ai owner@example
 npx cf deploy --mode cloudflare --secrets-file .data/cloudflare.secrets.json
 ```
 
-This preserves existing workspace IDs and encryption keys and stores the server secrets in an ignored mode-600 file. Back up the encryption keyring securely. Do not replace it when redeploying an existing workspace. Additional companies created from the dashboard receive independent UUIDs and `/w/<UUID>` URLs automatically. Use this full URL when pairing Argos Personal and append `/mcp` (or `/mcp/notion`, `/mcp/slack`, `/mcp/linear`, `/mcp/engram`) for an AI client. The `argosnode.ai` domain must be configured on Cloudflare before using its custom workspace hostname.
+This preserves existing workspace IDs and encryption keys and stores the server secrets in an ignored mode-600 file. Back up the encryption keyring securely. Do not replace it when redeploying an existing workspace. Additional companies created from the dashboard receive independent UUIDs and `/w/<UUID>` URLs automatically. Use this full URL when pairing Argos Personal and append `/mcp` (or `/mcp/notion`, `/mcp/slack`, `/mcp/linear`) for an AI client. The `argosnode.ai` domain must be configured on Cloudflare before using its custom workspace hostname.
 
 ## Open source
 
@@ -132,4 +125,8 @@ The backend and local runtime are MIT licensed. New dashboard and native present
 
 See [SELF_HOSTING.md](docs/SELF_HOSTING.md) for Docker/Compose, Google setup, per-company isolation, controlled dashboard updates and optional server custody. Each Node installation hosts one company in its own persistent database. The hosted dashboard is delivered at your backend origin; login and API data stay on that backend. The dashboard publisher is a trusted code supplier and can be pinned to a version.
 
-Server connections support Notion, Slack and Linear after their provider setup; Engram contexts currently remain on personal devices. In **Security**, administrators may allow server-managed connections. Every user must then consent to server storage for each connection. This does not transfer existing local tokens or add local confirmation to server-executed actions.
+Server connections support Notion, Slack and Linear after their provider setup. In **Security**, administrators may allow server-managed connections. Every user must then consent to server storage for each connection. This does not transfer existing local tokens or add local confirmation to server-executed actions.
+
+## Retired memory integration
+
+Argos is an access-control gateway, not a memory or RAG service. Built-in Engram tools, creation forms and `/mcp/engram` are no longer available. Old connections fail closed, including calls from previously installed apps. Existing encrypted memory files and unrelated provider connections are retained. Update Argos Personal to remove the old creation form. External knowledge tools remain subject to Argos policies when supported.

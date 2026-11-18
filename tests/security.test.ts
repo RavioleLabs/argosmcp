@@ -57,7 +57,6 @@ beforeEach(() => {
     demo: false,
     dataDir: '/tmp',
     env: {},
-    targets: [],
   };
   auth = new Auth(store, settings);
   execute.mockClear();
@@ -75,8 +74,8 @@ beforeEach(() => {
   store.run('INSERT INTO teams VALUES(?,?,?)', teamId, orgId, 'Engineering');
   store.run('INSERT INTO team_members VALUES(?,?,?)', orgId, teamId, owner.userId);
   shared = connection(owner);
-  personal = connection(member, 'personal', 'engram');
-  team = connection(owner, 'team', 'engram');
+  personal = connection(member, 'personal', 'notion');
+  team = connection(owner, 'team', 'notion');
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -85,7 +84,7 @@ afterEach(() => {
 describe('Tenant and context isolation', () => {
   it('rejects a connection from another company even with a known UUID', () =>
     expect(() => store.connection(outsider, shared.id)).toThrow());
-  it('does not let an organization owner read a member’s personal memory', () =>
+  it('does not let an organization owner read a member’s personal connection', () =>
     expect(() => store.connection(owner, personal.id)).toThrow());
   it('allows only the owner to access their personal context', () =>
     expect(store.connection(member, personal.id).id).toBe(personal.id));
@@ -103,13 +102,13 @@ describe('Tenant and context isolation', () => {
     expect(() => store.connection(member, personal.id)).toThrow();
     expect(() => store.member(member)).toThrow();
   });
-  it('rejects caller-supplied memory scopes', async () => {
+  it('rejects caller-supplied connection scopes', async () => {
     await expect(
       gateway.invoke(
         member,
         personal.id,
-        'engram_remember',
-        { content: 'secret', scope: `workspace:${teamId}` },
+        'notion_append',
+        { page_id: id(), text: 'secret', scope: `workspace:${teamId}` },
         id(),
       ),
     ).rejects.toThrow();
@@ -208,10 +207,10 @@ describe('Mandatory tool policy and exact approvals', () => {
     );
     expect(r.status).toBe('completed');
   });
-  it('applies company rules to private Engram without exposing the private context', async () => {
-    policy(personal, 'block', 'engram_recall');
+  it('applies company rules to private connections without exposing the private context', async () => {
+    policy(personal, 'block', 'notion_search');
     await expect(
-      gateway.invoke(member, personal.id, 'engram_recall', { query: 'private' }, id()),
+      gateway.invoke(member, personal.id, 'notion_search', { query: 'private' }, id()),
     ).rejects.toThrow(/blocked/);
     expect(() => store.connection(owner, personal.id)).toThrow();
   });
@@ -305,8 +304,8 @@ describe('Mandatory tool policy and exact approvals', () => {
     const r = await gateway.invoke(
       member,
       personal.id,
-      'engram_remember',
-      { content: 'Private' },
+      'notion_append',
+      { page_id: id(), text: 'Private' },
       id(),
     );
     expect(gateway.approvalRows(owner)).toHaveLength(0);
@@ -411,7 +410,7 @@ describe('OAuth grants and enterprise expiration', () => {
       gateway.invoke(
         { ...owner, grantId: g.id },
         team.id,
-        'engram_recall',
+        'notion_search',
         { query: 'secret' },
         id(),
       ),
@@ -523,26 +522,7 @@ describe('OAuth grants and enterprise expiration', () => {
     expect(() => store.takeState(token, 'test')).toThrow();
   });
 });
-describe('Engram bindings and revocation', () => {
-  it('refuses an Engram target bound to another user before any network call', async () => {
-    const connectors = new Connectors(store, vault, settings);
-    settings.targets = [
-      {
-        id: 'target',
-        label: 'Dedicated',
-        url: 'http://127.0.0.1:7777/mcp',
-        tokenEnv: 'TOKEN',
-        orgId: owner.orgId,
-        scope: 'personal',
-        contextId: owner.userId,
-      },
-    ];
-    store.run('UPDATE connections SET target_id=? WHERE id=?', 'target', personal.id);
-    const c = store.connection(member, personal.id);
-    await expect(connectors.execute(c, 'engram_recall', { query: 'secret' })).rejects.toThrow(
-      /binding mismatch/,
-    );
-  });
+describe('Provider retirement and revocation', () => {
   it('revokes locally and cancels pending actions before provider revocation', async () => {
     const connectors = new Connectors(store, vault, settings);
     const r = await gateway.invoke(
@@ -558,13 +538,16 @@ describe('Engram bindings and revocation', () => {
     ).toBe('cancelled');
     expect(() => store.live(store.connection(owner, shared.id))).toThrow();
   });
-  it('marks Engram local-only revocation honestly and removes its stored token', async () => {
+  it('blocks a retired provider before dispatch and still permits local revocation', async () => {
+    store.run("UPDATE connections SET provider='engram' WHERE id=?", personal.id);
     const connectors = new Connectors(store, vault, settings);
-    connectors.revokeLocally(personal);
-    await connectors.revokeUpstream(personal.id);
     const c = store.connection(member, personal.id);
-    expect(c.revoke_status).toBe('local_only');
-    expect(c.secret).toBeNull();
+    await expect(connectors.execute(c, 'notion_search', { query: 'secret' })).rejects.toThrow(
+      /no longer supported/,
+    );
+    connectors.revokeLocally(c);
+    await connectors.revokeUpstream(c.id);
+    expect(store.connection(member, c.id).secret).toBeNull();
   });
   it('preserves encrypted credentials for retry if the provider is unavailable', async () => {
     const connectors = new Connectors(store, vault, settings);

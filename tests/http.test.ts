@@ -21,7 +21,7 @@ beforeAll(async () => {
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  const settings: Settings = { origin, demo: true, dataDir: '/tmp', env: {}, targets: [] };
+  const settings: Settings = { origin, demo: true, dataDir: '/tmp', env: {} };
   app = createApp(store, vault, settings);
   server.on('request', app.app);
   const login = await fetch(origin + '/api/demo/login', {
@@ -48,7 +48,7 @@ async function rpc(path: string, token: string, method: string, params?: unknown
   });
 }
 it('publishes exact protected-resource metadata for every service', async () => {
-  for (const path of ['/mcp', '/mcp/slack', '/mcp/notion', '/mcp/linear', '/mcp/engram']) {
+  for (const path of ['/mcp', '/mcp/slack', '/mcp/notion', '/mcp/linear']) {
     const denied = await fetch(origin + path);
     expect(denied.status).toBe(401);
     expect(denied.headers.get('www-authenticate')).toContain(
@@ -171,4 +171,19 @@ it('completes public-client OAuth with PKCE and a service-specific resource', as
   const tokens = await result.json();
   expect((await rpc('/mcp/slack', tokens.access_token, 'tools/list', {})).status).toBe(200);
   expect((await exchange(verifier)).status).toBe(400);
+});
+
+it('does not advertise or accept the retired memory MCP surface', async () => {
+  const grant = app.auth.createGrant(principal, 'test', 'All services', [slack.id, notion.id]);
+  const token = app.auth.issueTokens(grant).access_token;
+  const response = await rpc('/mcp', token, 'tools/list', {});
+  const body = await response.json();
+  expect(body.result.tools.some((tool: any) => tool.name.startsWith('engram_'))).toBe(false);
+  const oldEndpoint = await rpc('/mcp/engram', token, 'tools/list', {});
+  expect(oldEndpoint.status).toBeGreaterThanOrEqual(400);
+  const oldTool = await rpc('/mcp', token, 'tools/call', {
+    name: 'engram_recall',
+    arguments: { connection_id: notion.id, query: 'private' },
+  }).then((r) => r.json());
+  expect(oldTool.error || oldTool.result?.isError).toBeTruthy();
 });

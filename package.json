@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Enterprise MCP access gateway with human approvals and scoped Engram contexts",
+  "description": "Enterprise MCP access gateway with human approvals and company access policies",
   "scripts": {
     "dev": "tsx src/main.ts",
     "demo": "ARGOS_DEMO=1 tsx src/main.ts",

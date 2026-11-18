@@ -42,7 +42,6 @@ beforeEach(async () => {
     origin,
     demo: false,
     dataDir: '/tmp',
-    targets: [],
     env: {
       ARGOS_SERVER_CUSTODY: '1',
       ARGOS_PROVIDER_VAULT_KEYRING: JSON.stringify({ v1: key }),

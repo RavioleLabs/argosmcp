@@ -7,7 +7,7 @@ import { Vault, hash, insist } from '../foundation.js';
 import type { Credentials } from '../connectors.js';
 export interface LocalConnection {
   id: string;
-  provider: 'slack' | 'linear' | 'notion' | 'engram';
+  provider: 'slack' | 'linear' | 'notion';
   scope?: 'personal' | 'team';
   teamId?: string;
   label: string;
@@ -43,9 +43,6 @@ export class LocalStorage {
     this.db.pragma('synchronous = FULL');
     this.db.exec(
       'CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY,payload TEXT NOT NULL); CREATE TABLE IF NOT EXISTS executions(profile TEXT NOT NULL,id TEXT NOT NULL,digest TEXT NOT NULL,status TEXT NOT NULL,payload TEXT,PRIMARY KEY(profile,id));',
-    );
-    this.db.exec(
-      'CREATE TABLE IF NOT EXISTS memories(context TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(context,id));',
     );
     if (!key) {
       // OS credential store only. No file fallback, no explicit cloud synchronization.

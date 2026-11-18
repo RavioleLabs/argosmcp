@@ -17,7 +17,7 @@ import type { LocalConnection } from './storage.js';
 export interface OAuthAttempt {
   clientName?: string;
   profileId: string;
-  provider: Exclude<LocalConnection['provider'], 'engram'>;
+  provider: LocalConnection['provider'];
   connectionId: string;
   label: string;
   clientId: string;
@@ -131,7 +131,7 @@ export async function exchange(
   };
 }
 export async function refresh(c: LocalConnection) {
-  if (c.provider === 'engram') return;
+  insist(Object.hasOwn(providerConfig, c.provider), 'Provider no longer supported', 410);
   if (!c.credentials.expires_at || c.credentials.expires_at > Date.now() + 60000) return;
   if (!c.credentials.refresh_token) throw new OAuthExpired();
   const previous = c.credentials.refresh_token;
@@ -143,7 +143,7 @@ export async function refresh(c: LocalConnection) {
 }
 export async function revoke(c: LocalConnection): Promise<'confirmed' | 'manual_required'> {
   try {
-    if (c.provider === 'engram') return 'confirmed';
+    if (!Object.hasOwn(providerConfig, c.provider)) return 'manual_required';
     if (c.provider === 'slack') {
       for (const token of [c.credentials.refresh_token, c.credentials.access_token].filter(
         Boolean,
