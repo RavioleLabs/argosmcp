@@ -76,3 +76,33 @@ it('rejects connector IDs from a different company and duplicate definitions', (
     portalOperations({ ...plan, servers: [plan.servers[0], plan.servers[0]] }, account, zone),
   ).toThrow();
 });
+
+it('supports a public documentation server without shared provider credentials', () => {
+  const bundle = portalOperations(
+    { ...plan, servers: [{ ...plan.servers[0], auth: 'unauthenticated' }] },
+    account,
+    zone,
+  );
+  const server = bundle.operations.find((x: any) => x.key === plan.servers[0].id);
+  expect(server.body.auth_type).toBe('unauthenticated');
+  expect(bundle.operations.find((x: any) => x.key === 'portal').body.servers[0].on_behalf).toBe(
+    false,
+  );
+  expect(
+    bundle.operations.find((x: any) => x.key === 'portal-access').body.oauth_configuration.enabled,
+  ).toBe(true);
+});
+
+it('uses stable Cloudflare identifiers of at most 32 characters', () => {
+  const operations = portalOperations(plan, account, zone).operations;
+  const server = operations.find((x: any) => x.key === plan.servers[0].id).body.id;
+  const portal = operations.find((x: any) => x.key === 'portal').body;
+  expect(server.length).toBeLessThanOrEqual(32);
+  expect(portal.id.length).toBeLessThanOrEqual(32);
+  expect(portal.servers[0].server_id).toBe(server);
+  expect(
+    operations.find((x: any) => x.key === plan.servers[0].id + '-access').body.destinations[0]
+      .mcp_server_id,
+  ).toBe(server);
+  expect(server).not.toContain('_');
+});

@@ -32,10 +32,13 @@ const schema = z.object({
         id: z.string().regex(/^c-[a-f0-9]{32}-[a-f0-9]{16}$/),
         name: z.string().min(1).max(160),
         endpoint: https,
+        auth: z.enum(['oauth', 'unauthenticated']).default('oauth'),
       }),
     )
     .max(30),
 });
+const cloudId = (kind, value) =>
+  kind + '-' + createHash('sha256').update(value).digest('hex').slice(0, 30);
 export function portalOperations(input, account, zone) {
   const p = schema.parse(input);
   z.string()
@@ -73,12 +76,14 @@ export function portalOperations(input, account, zone) {
       {
         key: s.id,
         command: ['mcp', 'servers', 'create'],
-        body: { id: s.id, name: s.name, hostname: s.endpoint, auth_type: 'oauth' },
+        body: { id: cloudId('c', s.id), name: s.name, hostname: s.endpoint, auth_type: s.auth },
       },
       {
         key: s.id + '-access',
         command: ['zero-trust', 'access', 'applications', 'create'],
-        body: app(s.name, 'mcp', [{ type: 'via_mcp_server_portal', mcp_server_id: s.id }]),
+        body: app(s.name, 'mcp', [
+          { type: 'via_mcp_server_portal', mcp_server_id: cloudId('c', s.id) },
+        ]),
       },
     );
   operations.push(
@@ -86,13 +91,13 @@ export function portalOperations(input, account, zone) {
       key: 'portal',
       command: ['mcp', 'portals', 'create'],
       body: {
-        id: 'argos-' + org,
+        id: cloudId('a', p.organizationId),
         name: p.company,
         hostname,
         code_mode: 'off',
         servers: p.servers.map((s) => ({
-          server_id: s.id,
-          on_behalf: true,
+          server_id: cloudId('c', s.id),
+          on_behalf: s.auth === 'oauth',
           default_disabled: false,
         })),
       },
@@ -149,9 +154,7 @@ export async function provision(bundle, run, state, save) {
     const portals = await run(['mcp', 'portals', 'list']);
     if (
       records.length ||
-      portals.some(
-        (x) => x.hostname === hostname || x.id === 'argos-' + p.organizationId.replaceAll('-', ''),
-      )
+      portals.some((x) => x.hostname === hostname || x.id === cloudId('a', p.organizationId))
     )
       throw Error(
         'Hostname or portal already exists. Review and import it manually; this command never overwrites existing portals.',

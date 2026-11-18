@@ -157,3 +157,13 @@ it.each(['portal_execute', 'portal_query_tools', 'portal_codemode_execute'])(
     ).toThrow();
   },
 );
+
+it('binds an operator-provisioned pilot hostname to only its assigned company', () => {
+  settings.env.ARGOS_PROVISIONED_PORTALS_JSON = JSON.stringify({ [owner.orgId]: endpoint });
+  const service = new CloudflarePortals(store, settings);
+  const assigned = service.request(owner, { mode: 'managed' });
+  expect(assigned.portal?.endpoint).toBe(endpoint);
+  expect(assigned.portal?.canActivate).toBe(true);
+  expect(service.request(other, { mode: 'managed' }).portal?.endpoint).not.toBe(endpoint);
+  expect(() => service.request(other, { mode: 'company', endpoint })).toThrow('managed setup');
+});

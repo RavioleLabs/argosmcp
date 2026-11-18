@@ -143,7 +143,14 @@ export class CloudflarePortals {
   private row(org: string) {
     return this.store.get<Portal>('SELECT * FROM cloudflare_portals WHERE org_id=?', org);
   }
+  private registry() {
+    return z
+      .record(z.string().uuid(), portalEndpoint)
+      .parse(JSON.parse(this.settings.env.ARGOS_PROVISIONED_PORTALS_JSON ?? '{}'));
+  }
   private managedEndpoint(org: string) {
+    const assigned = this.registry()[org];
+    if (assigned) return assigned;
     const domain = this.settings.env.ARGOS_MANAGED_PORTAL_DOMAIN;
     if (!domain) return null;
     insist(/^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}$/.test(domain), 'Invalid managed portal domain', 503);
@@ -152,10 +159,7 @@ export class CloudflarePortals {
     );
   }
   private provisioned(org: string, endpoint: string) {
-    const entries = z
-      .record(z.string().uuid(), portalEndpoint)
-      .parse(JSON.parse(this.settings.env.ARGOS_PROVISIONED_PORTALS_JSON ?? '{}'));
-    return entries[org] === endpoint;
+    return this.registry()[org] === endpoint;
   }
   view(p: Principal) {
     const admin = this.store.member(p).role !== 'member',
@@ -190,6 +194,14 @@ export class CloudflarePortals {
       'A portal is already linked. Revoke existing portal connections and contact your backend operator to migrate it.',
       409,
     );
+    if (b.mode === 'company' && b.endpoint)
+      insist(
+        !Object.values(this.registry()).some(
+          (url) => new URL(url).origin === new URL(b.endpoint!).origin,
+        ),
+        'Use managed setup for an Argos-managed portal',
+        400,
+      );
     const endpoint = b.mode === 'managed' ? this.managedEndpoint(p.orgId) : b.endpoint;
     if (b.mode === 'company' && b.endpoint && this.settings.env.ARGOS_MANAGED_PORTAL_DOMAIN) {
       const host = new URL(b.endpoint).hostname,

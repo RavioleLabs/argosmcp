@@ -57,3 +57,11 @@ Sources: [MCP Portals](https://developers.cloudflare.com/cloudflare-one/access-c
 The dashboard release `3a89ef46b59c47c8` is pinned by the managed backend. Publisher Worker `342f18d6-90e4-437c-80f5-2cdc5823c72f`; backend Worker `7627459b-9e30-458d-a7a0-ac25e09c721d`. Live HTML, JavaScript, stylesheet and authorization metadata return 200; unauthenticated portal settings return 401. The browser fixture showed the new mode choices and the disabled activation button for an unprovisioned managed portal. Test servers were stopped.
 
 Validation: 138 backend tests, 19 Cloudflare tests and 6 dashboard tests passed. All six types of provisioning request were accepted by the real CLI in dry-run mode; mocked provisioning tests cover pending DNS, collisions and resume. Staged source/assets passed Gitleaks. Local ignored deployment credentials are present by design and were excluded from publication. No actual managed portal, real provider OAuth round-trip or independent security certification is claimed.
+
+### Managed pilot provisioned
+
+A real managed pilot is now provisioned on `argos-demo.raviolelabs.com`, using the already active RavioleLabs zone while `argosnode.ai` activation remains pending. It belongs to a separate **RavioleLabs · Cloudflare demo** workspace. Access is restricted to its owner; Code Mode is off, Managed OAuth uses public PKCE clients and the workspace-specific callback, with a 24-hour grant. The upstream is Cloudflare's real public documentation MCP, so this pilot does not require Slack/Notion tokens.
+
+The portal's public OAuth discovery and Argos registration/linking succeeded. Unauthenticated MCP requests return 401. Provisioning exposed an actual Cloudflare API limit of 32 characters for resource identifiers; the helper now generates stable bounded IDs and supports public servers explicitly without sharing provider credentials. An operator-provisioned hostname override is scoped to its assigned company and cannot be claimed through another company's setup.
+
+Personal authorization and the approval-gated end-to-end tool call are pending user consent; infrastructure creation and metadata checks alone are not an end-to-end success claim. Production Worker after this provisioning support update: `b2fe260e-e299-4b9a-83e4-28bd386196c8`. Validation: 141 backend tests and 19 Cloudflare tests passed.
