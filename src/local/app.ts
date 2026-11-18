@@ -1,6 +1,7 @@
 import { remoteConfigSchema, configFingerprint } from '../remote-definition.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { resolve } from 'node:path';
+import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { opaque, hash, insist, Fault, id } from '../foundation.js';
 import { LocalRuntime } from './runtime.js';
@@ -9,13 +10,17 @@ import { newAttempt, authorizeURL, exchange, type OAuthAttempt } from './provide
 export function createLocalApp(runtime: LocalRuntime, origin: string, assets: string) {
   const app = express(),
     launchToken = opaque(),
-    sessions = new Set<string>(),
+    sessions = new Map<string, number>(),
     attempts = new Map<string, OAuthAttempt>();
+  const launchedAt = Date.now(),
+    sessionLifetime = 12 * 3600_000;
+  let launchConsumed = false;
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.set({
       'Cache-Control': 'no-store',
       'Referrer-Policy': 'no-referrer',
+      'Cross-Origin-Resource-Policy': 'same-origin',
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Content-Security-Policy':
@@ -33,10 +38,22 @@ export function createLocalApp(runtime: LocalRuntime, origin: string, assets: st
       .object({ key: z.string().max(100) })
       .strict()
       .parse(req.body);
-    insist(hash(b.key) === hash(launchToken), 'Open Argos from its application icon', 401);
+    insist(
+      !launchConsumed &&
+        Date.now() < launchedAt + 60_000 &&
+        timingSafeEqual(Buffer.from(hash(b.key), 'hex'), Buffer.from(hash(launchToken), 'hex')),
+      'Quit and reopen Argos Personal to start a new session',
+      401,
+    );
+    launchConsumed = true;
     const token = opaque();
-    sessions.add(hash(token));
-    res.cookie('argos_local', token, { httpOnly: true, sameSite: 'strict', path: '/' });
+    sessions.set(hash(token), Date.now() + sessionLifetime);
+    res.cookie('argos_local', token, {
+      httpOnly: true,
+      sameSite: 'strict',
+      path: '/',
+      maxAge: sessionLifetime,
+    });
     res.json({ ok: true });
   });
   app.get('/oauth/callback', async (req, res) => {
@@ -94,8 +111,13 @@ export function createLocalApp(runtime: LocalRuntime, origin: string, assets: st
       .map((x) => x.trim())
       .find((x) => x.startsWith('argos_local='))
       ?.slice('argos_local='.length);
-    if (!token || !sessions.has(hash(token)))
-      return res.status(401).json({ error: 'Open Argos from its application icon' });
+    const key = hash(token ?? '');
+    if (!token || (sessions.get(key) ?? 0) <= Date.now()) {
+      sessions.delete(key);
+      return res
+        .status(401)
+        .json({ error: 'Quit and reopen Argos Personal to start a new session' });
+    }
     next();
   });
   app.get('/api/state', (_req, res) =>

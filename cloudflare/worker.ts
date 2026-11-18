@@ -361,6 +361,7 @@ const privateJSON = (value: unknown, status = 200) =>
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',
+      'Cross-Origin-Resource-Policy': 'same-origin',
     },
   });
 

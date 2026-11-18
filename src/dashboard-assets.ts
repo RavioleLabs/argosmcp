@@ -7,6 +7,7 @@ export const dashboardHeaders = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
+  'Cross-Origin-Resource-Policy': 'same-origin',
 };
 async function bounded(url: string, type: string, limit: number) {
   // An operator-configured publisher, never a user-provided API proxy. No request headers are forwarded.

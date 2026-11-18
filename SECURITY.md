@@ -1,5 +1,7 @@
 # Security model
 
+The [18 November 2026 security review](docs/SECURITY_REVIEW_2026-11-18.md) records scope, mitigations, scanner limitations and outstanding finance/crypto release gates. An unrestricted agent running as the credential owner is not isolated from the local client. Previews must not be advertised as tamper-proof, independently audited or suitable for custody of financial assets.
+
 ## The boundary
 
 For local-custody connections, the hosted service does not receive provider access tokens, refresh tokens or local device private keys through the credential flow. The local connector obtains OAuth credentials directly from the provider and uses them at fixed provider endpoints. Cloud login for Argos itself is a separate Google OIDC flow.

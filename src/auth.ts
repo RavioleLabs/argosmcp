@@ -482,9 +482,30 @@ export class Auth implements OAuthServerProvider {
     scopes?: string[],
     resource?: URL,
   ) {
-    return this.store.db.transaction(() => {
-      const t = this.store.get<{ grant_id: string }>(
-        'SELECT grant_id FROM tokens WHERE token_hash=? AND kind=? AND expires_at>?',
+    const result = this.store.db.transaction(() => {
+      this.store.run('DELETE FROM used_refresh_tokens WHERE expires_at<=?', Date.now());
+      const used = this.store.get<Grant>(
+        'SELECT g.* FROM used_refresh_tokens t JOIN grants g ON g.id=t.grant_id WHERE t.token_hash=?',
+        hash(token),
+      );
+      if (
+        used &&
+        used.client_id === client.client_id &&
+        resource?.href === this.grantResource(used.id) &&
+        !scopes?.some((s) => s !== 'mcp:tools')
+      ) {
+        // Commit family revocation before throwing the OAuth error outside the transaction.
+        this.store.run('UPDATE grants SET revoked=1 WHERE id=?', used.id);
+        this.store.run('DELETE FROM tokens WHERE grant_id=?', used.id);
+        this.store.audit(
+          { orgId: used.org_id, userId: used.user_id },
+          'agent.refresh_reuse_detected',
+          used.id,
+        );
+        return null;
+      }
+      const t = this.store.get<{ grant_id: string; expires_at: number }>(
+        'SELECT grant_id,expires_at FROM tokens WHERE token_hash=? AND kind=? AND expires_at>?',
         hash(token),
         'refresh',
         Date.now(),
@@ -497,9 +518,18 @@ export class Auth implements OAuthServerProvider {
         throw new InvalidGrantError('Invalid refresh request');
       const g = this.store.grant(t.grant_id);
       if (g.client_id !== client.client_id) throw new InvalidGrantError('Client mismatch');
+      this.store.run(
+        'INSERT INTO used_refresh_tokens VALUES(?,?,?)',
+        hash(token),
+        g.id,
+        t.expires_at,
+      );
       this.store.run('DELETE FROM tokens WHERE token_hash=?', hash(token));
       return this.issueTokens(g);
     })();
+    if (!result)
+      throw new InvalidGrantError('Refresh token reuse detected. Reauthorize this client.');
+    return result;
   }
   async verifyAccessToken(token: string) {
     try {

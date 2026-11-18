@@ -1,7 +1,7 @@
 import type { RemoteDefinition } from '../remote-definition.js';
 import Database from 'better-sqlite3';
 import { Entry } from '@napi-rs/keyring';
-import { mkdirSync, chmodSync } from 'node:fs';
+import { mkdirSync, chmodSync, lstatSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { Vault, hash, insist } from '../foundation.js';
@@ -39,8 +39,28 @@ export class LocalStorage {
   vault: Vault;
   constructor(directory: string, key?: Buffer) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
-    this.db = new Database(resolve(directory, 'connector.sqlite'));
-    chmodSync(resolve(directory, 'connector.sqlite'), 0o600);
+    insist(
+      lstatSync(directory).isDirectory() && !lstatSync(directory).isSymbolicLink(),
+      'Unsafe credential directory',
+      503,
+    );
+    // mkdir's mode does not repair a pre-existing directory. Reject redirected DB/sidecars.
+    chmodSync(directory, 0o700);
+    const database = resolve(directory, 'connector.sqlite');
+    for (const suffix of ['', '-wal', '-shm']) {
+      const file = database + suffix;
+      const stat = lstatSync(file, { throwIfNoEntry: false });
+      if (stat) {
+        insist(
+          stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1,
+          'Unsafe credential database',
+          503,
+        );
+        chmodSync(file, 0o600);
+      }
+    }
+    this.db = new Database(database);
+    chmodSync(database, 0o600);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = FULL');
     this.db.exec(

@@ -48,6 +48,15 @@ async function rpc(path: string, token: string, method: string, params?: unknown
   });
 }
 it('publishes exact protected-resource metadata for every service', async () => {
+  const session = await fetch(origin + '/api/session');
+  expect(session.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+  expect(session.headers.get('access-control-allow-origin')).toBeNull();
+  await session.text();
+  const metadata = await fetch(origin + '/.well-known/oauth-protected-resource/mcp');
+  expect(metadata.headers.get('cross-origin-resource-policy')).toBe('cross-origin');
+  expect(metadata.headers.get('access-control-allow-origin')).toBe('*');
+  expect(metadata.headers.get('access-control-allow-credentials')).toBeNull();
+  await metadata.text();
   for (const path of ['/mcp', '/mcp/slack', '/mcp/notion', '/mcp/linear']) {
     const denied = await fetch(origin + path);
     expect(denied.status).toBe(401);

@@ -460,6 +460,45 @@ describe('OAuth grants and enterprise expiration', () => {
     await expect(
       auth.exchangeRefreshToken(client, tokens.refresh_token!, undefined, new URL(auth.audience)),
     ).rejects.toThrow();
+    await expect(auth.verifyAccessToken(next.access_token)).rejects.toThrow();
+    await expect(auth.verifyAccessToken(tokens.access_token)).rejects.toThrow();
+    await expect(
+      auth.exchangeRefreshToken(client, next.refresh_token!, undefined, new URL(auth.audience)),
+    ).rejects.toThrow();
+    expect(store.get<any>('SELECT revoked FROM grants WHERE id=?', g.id).revoked).toBe(1);
+    expect(
+      store.get<any>('SELECT token_hash FROM used_refresh_tokens WHERE grant_id=?', g.id)
+        .token_hash,
+    ).not.toBe(tokens.refresh_token);
+  });
+  it('contains refresh replay to its grant and rejects mismatched clients without revoking the owner', async () => {
+    const client = { client_id: 'test', redirect_uris: ['https://example.test/callback'] };
+    const g = auth.createGrant(owner, 'test', 'First', [shared.id]);
+    const unrelated = auth.issueTokens(auth.createGrant(owner, 'test', 'Second', [shared.id]));
+    const original = auth.issueTokens(g);
+    const next = await auth.exchangeRefreshToken(
+      client,
+      original.refresh_token!,
+      undefined,
+      new URL(auth.audience),
+    );
+    await expect(
+      auth.exchangeRefreshToken(
+        { ...client, client_id: 'attacker' },
+        original.refresh_token!,
+        undefined,
+        new URL(auth.audience),
+      ),
+    ).rejects.toThrow();
+    await expect(auth.verifyAccessToken(next.access_token)).resolves.toBeDefined();
+    await expect(
+      auth.exchangeRefreshToken(client, original.refresh_token!, undefined, new URL(auth.audience)),
+    ).rejects.toThrow();
+    await expect(auth.verifyAccessToken(next.access_token)).rejects.toThrow();
+    await expect(auth.verifyAccessToken(unrelated.access_token)).resolves.toBeDefined();
+    expect(
+      store.all<any>('SELECT * FROM audit WHERE event=?', 'agent.refresh_reuse_detected'),
+    ).toHaveLength(1);
   });
   it('binds authorization codes to the redirect, client and audience, and consumes once', async () => {
     const client = { client_id: 'test', redirect_uris: ['https://example.test/callback'] },
