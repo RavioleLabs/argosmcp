@@ -138,7 +138,7 @@ export class Vault {
   }
   private encrypt(data: Buffer, key: Buffer, context: string) {
     const nonce = randomBytes(12),
-      cipher = createCipheriv('aes-256-gcm', key, nonce);
+      cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 });
     cipher.setAAD(Buffer.from(context));
     const bytes = Buffer.concat([cipher.update(data), cipher.final()]);
     return Buffer.concat([nonce, cipher.getAuthTag(), bytes]).toString('base64');
@@ -146,7 +146,9 @@ export class Vault {
   private decrypt(value: string, key: Buffer, context: string) {
     const bytes = Buffer.from(value, 'base64');
     insist(bytes.length >= 28, 'Invalid ciphertext', 500);
-    const cipher = createDecipheriv('aes-256-gcm', key, bytes.subarray(0, 12));
+    const cipher = createDecipheriv('aes-256-gcm', key, bytes.subarray(0, 12), {
+      authTagLength: 16,
+    });
     cipher.setAAD(Buffer.from(context));
     cipher.setAuthTag(bytes.subarray(12, 28));
     return Buffer.concat([cipher.update(bytes.subarray(28)), cipher.final()]);
@@ -200,6 +202,8 @@ export class Store {
       CREATE TABLE IF NOT EXISTS grants (id TEXT PRIMARY KEY, org_id TEXT NOT NULL, user_id TEXT NOT NULL, client_id TEXT NOT NULL, label TEXT NOT NULL, connections TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(org_id,user_id) REFERENCES members(org_id,user_id));
       CREATE TABLE IF NOT EXISTS grant_resources (grant_id TEXT PRIMARY KEY REFERENCES grants(id), resource TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS tokens (token_hash TEXT PRIMARY KEY, grant_id TEXT NOT NULL REFERENCES grants(id), kind TEXT NOT NULL, expires_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS used_refresh_tokens (token_hash TEXT PRIMARY KEY, grant_id TEXT NOT NULL REFERENCES grants(id), expires_at INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS used_refresh_expiry ON used_refresh_tokens(expires_at);
       CREATE TABLE IF NOT EXISTS codes (code_hash TEXT PRIMARY KEY, client_id TEXT NOT NULL, grant_id TEXT NOT NULL REFERENCES grants(id), challenge TEXT NOT NULL, redirect_uri TEXT NOT NULL, resource TEXT NOT NULL, expires_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS invocations (id TEXT PRIMARY KEY, org_id TEXT NOT NULL, user_id TEXT NOT NULL, grant_id TEXT, connection_id TEXT NOT NULL, tool TEXT NOT NULL, digest TEXT NOT NULL, payload TEXT NOT NULL, result TEXT, status TEXT NOT NULL, revision INTEGER NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, approver_id TEXT, idempotency_key TEXT NOT NULL, UNIQUE(org_id,user_id,idempotency_key), FOREIGN KEY(org_id,connection_id) REFERENCES connections(org_id,id));
       CREATE TABLE IF NOT EXISTS audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, org_id TEXT NOT NULL, actor_id TEXT NOT NULL, event TEXT NOT NULL, entity_id TEXT NOT NULL, created_at INTEGER NOT NULL, previous_hash TEXT NOT NULL, entry_hash TEXT NOT NULL);

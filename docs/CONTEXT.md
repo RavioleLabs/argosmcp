@@ -82,3 +82,7 @@ The separate Engram contexts Worker is now implemented with its own D1 database,
 ## 2026-11-18: Open connector directory and official MCPs
 
 Argos must not be limited to native Slack, Notion and Linear adapters. Provide a documented vendor directory including Google Drive, Attio and BonDossier, plus company-defined MCP servers and member requests. Company administrators approve connector availability and tools; users connect their own accounts with OAuth on their devices. Official Slack MCP with OAuth is the preferred Slack path; its app approval, optional DM scopes and Argos policy are separate controls. Keep legacy API connections explicitly separate. See COMPANY_CONNECTORS.md and CONNECTOR_DIRECTORY.md for the implementation and prerequisites. Argos Personal 0.1.3 includes the shared branch logo as its macOS icon and menu bar symbol.
+
+## Security priority, 18 November 2026
+
+Emeric requested security as the central product differentiator for finance and crypto. Same-user autonomous agents are explicitly in the threat model. Do not claim that a local executable/hash check isolates such an agent. See SECURITY_REVIEW_2026-11-18.md for implemented mitigations and separate future release gates: isolated executor, independent strong approvals, financial signing separation, audited distribution and independent review.

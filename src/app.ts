@@ -60,6 +60,19 @@ export function createApp(store: Store, vault: Vault, settings: Settings) {
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
+      'Cross-Origin-Resource-Policy':
+        req.path.startsWith('/.well-known/') ||
+        [
+          '/mcp',
+          '/mcp/slack',
+          '/mcp/notion',
+          '/mcp/linear',
+          '/register',
+          '/token',
+          '/revoke',
+        ].includes(req.path)
+          ? 'cross-origin'
+          : 'same-origin',
       'Cache-Control': 'no-store',
       'Content-Security-Policy':
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",

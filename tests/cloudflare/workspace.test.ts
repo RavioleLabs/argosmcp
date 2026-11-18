@@ -9,9 +9,61 @@ import { runInDurableObject, evictDurableObject, runDurableObjectAlarm } from 'c
 import { expect, it } from 'vitest';
 import { hash, opaque, Store, Vault } from '../../src/foundation.js';
 import { DurableDatabase } from '../../cloudflare/worker.js';
+import { Auth } from '../../src/auth.js';
 const alpha = '00000000-0000-4000-8000-000000000101',
   beta = '00000000-0000-4000-8000-000000000102';
 const user = '00000000-0000-4000-8000-000000000201';
+it('persists refresh replay detection and family revocation across object eviction', async () => {
+  const company = crypto.randomUUID(),
+    uid = crypto.randomUUID(),
+    connection = crypto.randomUUID();
+  const stub = env.WORKSPACES.getByName(company);
+  const settings = { origin: 'https://security.example.test', demo: false, dataDir: '', env: {} };
+  const client = { client_id: 'fixture', redirect_uris: ['https://client.example/callback'] };
+  const tokens = await runInDurableObject(stub, async (_instance, state) => {
+    const db = new Store(new DurableDatabase(state.storage));
+    db.run('INSERT INTO users VALUES(?,?,?,?)', uid, null, 'fixture@example.test', 'Fixture');
+    db.run('INSERT INTO organizations(id,name) VALUES(?,?)', company, 'Security fixture');
+    db.run("INSERT INTO members VALUES(?,?,'owner')", company, uid);
+    db.run(
+      "INSERT INTO connections(id,org_id,provider,label,scope,owner_id,created_at,expires_at,demo) VALUES(?,?,'slack','Fixture','personal',?,?,?,1)",
+      connection,
+      company,
+      uid,
+      Date.now(),
+      Date.now() + 600000,
+    );
+    const auth = new Auth(db, settings);
+    const grant = auth.createGrant({ orgId: company, userId: uid }, client.client_id, 'Fixture', [
+      connection,
+    ]);
+    const original = auth.issueTokens(grant);
+    const next = await auth.exchangeRefreshToken(
+      client,
+      original.refresh_token!,
+      undefined,
+      new URL(auth.audience),
+    );
+    return { original, next };
+  });
+  await evictDurableObject(stub);
+  await runInDurableObject(stub, async (_instance, state) => {
+    const auth = new Auth(new Store(new DurableDatabase(state.storage)), settings);
+    await expect(
+      auth.exchangeRefreshToken(
+        client,
+        tokens.original.refresh_token!,
+        undefined,
+        new URL(auth.audience),
+      ),
+    ).rejects.toThrow('reuse detected');
+  });
+  await evictDurableObject(stub);
+  await runInDurableObject(stub, async (_instance, state) => {
+    const auth = new Auth(new Store(new DurableDatabase(state.storage)), settings);
+    await expect(auth.verifyAccessToken(tokens.next.access_token)).rejects.toThrow();
+  });
+});
 it('serves authenticated API and MCP discovery through the Workers HTTP adapter', async () => {
   const health = await exports.default.fetch('https://alpha.example.test/health');
   expect(health.status).toBe(200);

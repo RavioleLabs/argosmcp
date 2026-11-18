@@ -46,13 +46,26 @@ const headerObject = (input?: HeadersInit) => {
 };
 export async function safeFetch(input: string | URL, init: RequestInit = {}): Promise<Response> {
   const u = new URL(publicURL.parse(String(input)));
-  const addresses = await lookup(u.hostname, { family: 4, all: true });
+  // The deadline includes DNS, otherwise a stuck resolver holds the serial
+  // connector queue before the HTTPS request timer can even start.
+  const signal = AbortSignal.any([
+    AbortSignal.timeout(30000),
+    ...(init.signal ? [init.signal] : []),
+  ]);
+  signal.throwIfAborted();
+  const addresses = await new Promise<{ address: string; family: number }[]>((resolve, reject) => {
+    const abort = () => reject(new Fault(502, 'MCP name resolution interrupted'));
+    signal.addEventListener('abort', abort, { once: true });
+    lookup(u.hostname, { family: 4, all: true })
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', abort));
+  });
   insist(
     addresses.length > 0 && addresses.every((a) => isPublicIPv4(a.address)),
     'MCP endpoint must resolve only to public addresses',
     400,
   );
-  init.signal?.throwIfAborted();
+  signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
     let ended = false;
@@ -105,12 +118,10 @@ export async function safeFetch(input: string | URL, init: RequestInit = {}): Pr
         resolve(new Response([204, 304].includes(status) ? null : stream, { status, headers }));
       },
     );
-    const timeout = setTimeout(() => req.destroy(new Error('Timeout')), 30000);
     const abort = () => req.destroy(new Error('Aborted'));
-    init.signal?.addEventListener('abort', abort, { once: true });
+    signal.addEventListener('abort', abort, { once: true });
     req.on('close', () => {
-      clearTimeout(timeout);
-      init.signal?.removeEventListener('abort', abort);
+      signal.removeEventListener('abort', abort);
     });
     req.on('error', () => {
       const error = new Fault(502, 'MCP request failed');
