@@ -1,4 +1,3 @@
-import { executeMemory } from './memory.js';
 import { generateKeyPairSync } from 'node:crypto';
 import { catalog, OAuthExpired, type ToolName } from '../connectors.js';
 import { canonical, hash, id, insist, Fault } from '../foundation.js';
@@ -251,10 +250,7 @@ export class LocalRuntime {
         // Persist the receipt before performing the provider write. Restart reports unknown, never retries it.
         this.storage.record(p.id, a.id, { id: a.id, receipt, status: 'unknown' });
       };
-      const output =
-        c.provider === 'engram'
-          ? (await dispatch(), executeMemory(this.storage, p, c, a.tool as ToolName, a.args))
-          : await this.providerExecute(c, a.tool as ToolName, a.args, dispatch);
+      const output = await this.providerExecute(c, a.tool as ToolName, a.args, dispatch);
       insist(receipt, 'No server authorization');
       const safe = redactResult(output, [
         c.credentials.access_token,

@@ -203,8 +203,8 @@ it('creates isolated companies for any Google account, retries safely, joins by 
   await json(
     await native('/api/local/connections', {
       id: connectionId,
-      provider: 'engram',
-      label: 'Personal memory',
+      provider: 'notion',
+      label: 'Personal documents',
     }),
   );
   const client = await json(
@@ -216,7 +216,7 @@ it('creates isolated companies for any Google account, retries safely, joins by 
     201,
   );
   const verifier = opaque(),
-    resourceURL = first.url + '/mcp/engram';
+    resourceURL = first.url + '/mcp/notion';
   const params = new URLSearchParams({
     client_id: client.client_id,
     response_type: 'code',
@@ -271,7 +271,7 @@ it('creates isolated companies for any Google account, retries safely, joins by 
   await invalidVerifier.text();
   const tokens = await json(await exchange(first.url, verifier));
   const rpc = (base: string, method: string, params: unknown = {}) =>
-    exports.default.fetch(base + '/mcp/engram', {
+    exports.default.fetch(base + '/mcp/notion', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer ' + tokens.access_token,
@@ -281,7 +281,7 @@ it('creates isolated companies for any Google account, retries safely, joins by 
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
     });
   const tools = await json(await rpc(first.url, 'tools/list'));
-  expect(tools.result.tools.map((t: any) => t.name)).toContain('engram_recall');
+  expect(tools.result.tools.map((t: any) => t.name)).toContain('notion_search');
   await json(await rpc(second.url, 'tools/list'), 401);
   const replay = await exchange(first.url, verifier);
   expect(replay.status).toBe(400);

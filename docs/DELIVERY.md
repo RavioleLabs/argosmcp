@@ -1,4 +1,4 @@
-# Delivery — 2026-11-18
+# Delivery · 2026-11-18
 
 - Public backend/local runtime: https://github.com/RavioleLabs/argosmcp
 - Private presentation repository: `RavioleLabs/argos-dashboard` (verified private).

@@ -92,10 +92,7 @@ export class Auth implements OAuthServerProvider {
     };
   }
   resources() {
-    return [
-      this.audience,
-      ...['slack', 'notion', 'linear', 'engram'].map((p) => this.audience + '/' + p),
-    ];
+    return [this.audience, ...['slack', 'notion', 'linear'].map((p) => this.audience + '/' + p)];
   }
   grantResource(grantId: string) {
     return (

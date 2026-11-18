@@ -34,27 +34,7 @@ const settings: Settings = {
   demo,
   dataDir: resolve(process.env.ARGOS_DATA_DIR ?? (demo ? '.data/demo' : '.data/live')),
   env: process.env,
-  targets: JSON.parse(process.env.ENGRAM_TARGETS_JSON ?? '[]'),
 };
-insist(
-  settings.targets.every(
-    (t) =>
-      typeof t.id === 'string' &&
-      typeof t.url === 'string' &&
-      typeof t.tokenEnv === 'string' &&
-      typeof t.orgId === 'string' &&
-      ['personal', 'team'].includes(t.scope) &&
-      typeof t.contextId === 'string',
-  ),
-  'Invalid Engram target configuration',
-  500,
-);
-// Reusing a URL across namespaces would expose the same upstream corpus across contexts.
-insist(
-  new Set(settings.targets.map((t) => new URL(t.url).href)).size === settings.targets.length,
-  'Each Engram context requires a distinct upstream endpoint',
-  500,
-);
 insist(
   demo || settings.tenant,
   'Configure a dedicated company UUID and owner for this backend in ARGOS_TENANTS_JSON',

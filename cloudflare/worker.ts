@@ -141,13 +141,7 @@ export class CompanyWorkspace extends DurableObject<Env> {
       demo: false,
       dataDir: '',
       env: secrets,
-      targets: JSON.parse(secrets.ENGRAM_TARGETS_JSON || '[]'),
     };
-    insist(
-      new Set(settings.targets.map((t) => new URL(t.url).href)).size === settings.targets.length,
-      'Engram targets must be distinct',
-      503,
-    );
     this.runtime = createApp(this.store, loadVault(settings), settings);
     return this.runtime;
   }
@@ -303,9 +297,7 @@ function workspaceRoute(path: string): { id: string; internalPath: string } | nu
   if (scoped) return { id: scoped[1], internalPath: scoped[2] ?? '/' };
   const resource = path.match(
     new RegExp(
-      '^/\\.well-known/oauth-protected-resource/w/(' +
-        UUID +
-        ')/mcp(?:/(slack|notion|linear|engram))?$',
+      '^/\\.well-known/oauth-protected-resource/w/(' + UUID + ')/mcp(?:/(slack|notion|linear))?$',
     ),
   );
   if (resource) return { id: resource[1], internalPath: path };
