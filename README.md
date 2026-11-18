@@ -1,5 +1,10 @@
 # ArgosMCP + Argos Personal
 
+## Current connection modes (18 November 2026)
+
+Local remains recommended and connects directly from Argos Personal to providers. New cloud connections use a company Cloudflare MCP Portal, either in Argos’s account or the company’s account. Backend hosting is independent: managed Argos on Cloudflare, company Cloudflare, or MIT self-hosted Docker/Node. Cloudflare holds cloud provider tokens; the Argos backend holds encrypted portal access that its operator can use. Existing direct server connections are retained for explicit migration, not silently transferred. See [the portal setup and delivery status](docs/CLOUDFLARE_PORTALS.md). Earlier dated notes below describe the implementation history.
+
+
 Company policy for AI tools, with provider credentials kept on the user's device.
 
 Argos Personal exists to avoid concentrating every user’s provider OAuth tokens in a central server vault. It stores credentials on the user’s computer and executes tools after ArgosMCP authorizes the action. Company policy and local approvals still apply; requests and results transit Argos. Optional server-managed token storage requires operator configuration, company administrator approval and explicit user consent. Its operator can decrypt the stored tokens. Local storage is the recommended model and requires the user’s computer to remain online.

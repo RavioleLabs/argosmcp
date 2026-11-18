@@ -176,7 +176,7 @@ async function withClient<T>(
     await client.close();
   }
 }
-async function list(client: Client): Promise<RemoteTool[]> {
+async function list(client: Client, portal = false): Promise<RemoteTool[]> {
   const tools: RemoteTool[] = [];
   let cursor: string | undefined;
   const cursors = new Set<string>();
@@ -199,10 +199,21 @@ async function list(client: Client): Promise<RemoteTool[]> {
     if (cursor) cursors.add(cursor);
     insist(cursors.size < 20, 'Too many MCP tool pages', 502);
   } while (cursor);
-  return parseTools(tools);
+  return parseTools(
+    portal
+      ? tools.filter(
+          (t) =>
+            ![
+              'portal_list_servers',
+              'portal_toggle_servers',
+              'portal_toggle_single_server',
+            ].includes(t.name),
+        )
+      : tools,
+  );
 }
 export const discoverRemote = (config: RemoteConfig, token: string, send = safeFetch) =>
-  withClient(config, token, list, send);
+  withClient(config, token, (client) => list(client, config.kind === 'cloudflare-portal'), send);
 export async function executeRemote(
   c: LocalConnection,
   name: string,
@@ -218,7 +229,9 @@ export async function executeRemote(
     d.config,
     c.credentials.access_token,
     async (client) => {
-      const current = (await list(client)).find((x) => x.name === t.name);
+      const current = (await list(client, d.config.kind === 'cloudflare-portal')).find(
+        (x) => x.name === t.name,
+      );
       insist(
         current && canonical(current) === canonical(t),
         'Provider tool changed. Ask your administrator to review it again.',

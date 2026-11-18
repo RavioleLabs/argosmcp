@@ -19,6 +19,7 @@ let server: Server,
 const key = Buffer.alloc(32, 8).toString('base64');
 const realFetch = globalThis.fetch;
 let providerCalls: string[];
+let testSettings: Settings;
 let remoteCalls: string[],
   remoteChanged = false,
   onRemoteList: (() => void) | undefined;
@@ -94,10 +95,12 @@ beforeEach(async () => {
     remoteFetch,
     env: {
       ARGOS_SERVER_CUSTODY: '1',
+      ARGOS_ALLOW_DIRECT_SERVER_CUSTODY: '1',
       ARGOS_PROVIDER_VAULT_KEYRING: JSON.stringify({ v1: key }),
       SLACK_PUBLIC_CLIENT_ID: 'fixture-public-client',
     },
   };
+  testSettings = settings;
   app = createApp(store, new Vault({ v1: Buffer.alloc(32, 7) }), settings);
   server.on('request', app.app);
   vi.stubGlobal('fetch', async (input: any, init: any) => {
@@ -450,4 +453,34 @@ it('blocks cross-company connector references, sharing personal MCP accounts and
       })
     ).status,
   ).toBe(404);
+});
+
+it('requires a linked company portal for new cloud connections by default', async () => {
+  delete testSettings.env.ARGOS_ALLOW_DIRECT_SERVER_CUSTODY;
+  await enabled();
+  const direct = await api(base() + '/connect/slack', {
+    label: 'Slack',
+    scope: 'personal',
+    acknowledgeServerCustody: true,
+  });
+  expect(direct.status).toBe(403);
+  const forged = new CompanyConnectors(store).create(
+    { orgId: org, userId: owner },
+    {
+      name: 'Unlinked portal',
+      config: {
+        kind: 'cloudflare-portal',
+        endpoint: 'https://remote.example.com/mcp',
+        auth: 'none',
+      },
+    },
+  );
+  const r = await api(base() + '/connect/mcp', {
+    label: 'Forged portal',
+    connectorId: forged.id,
+    scope: 'personal',
+    acknowledgeServerCustody: true,
+  });
+  expect(r.status).toBe(403);
+  expect(remoteCalls).toEqual([]);
 });

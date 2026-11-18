@@ -24,6 +24,7 @@ export const publicURL = z
 export const remoteConfigSchema = z
   .object({
     endpoint: publicURL,
+    kind: z.literal('cloudflare-portal').optional(),
     auth: z.enum(['oauth', 'bearer', 'none']),
     oauth: z
       .object({
@@ -183,7 +184,8 @@ export function parseTools(input: unknown): RemoteTool[] {
   insist(Buffer.byteLength(JSON.stringify(tools)) <= 180000, 'Tool manifest too large', 400);
   for (const t of tools) {
     insist(
-      !t.name.startsWith('portal_codemode_'),
+      !t.name.startsWith('portal_codemode_') &&
+        !['portal_execute', 'portal_query_tools'].includes(t.name),
       'Disable Cloudflare Code Mode and expose individual tools before connecting this portal',
       400,
     );

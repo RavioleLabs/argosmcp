@@ -318,6 +318,17 @@ export class ServerCustody {
         provider === 'mcp'
           ? new CompanyConnectors(this.store).get(p, z.string().uuid().parse(input.connectorId))
           : undefined;
+      if (this.settings.env.ARGOS_ALLOW_DIRECT_SERVER_CUSTODY !== '1')
+        insist(
+          definition?.config.kind === 'cloudflare-portal' &&
+            this.store.get(
+              'SELECT 1 FROM cloudflare_portals WHERE org_id=? AND connector_id=?',
+              p.orgId,
+              definition.id,
+            ),
+          'Cloud connections must use your company Cloudflare portal. Use Argos Personal for direct provider access.',
+          403,
+        );
       if (definition) {
         insist(input.scope === 'personal', 'Remote MCP accounts are personal', 400);
         insist(definition.status !== 'disabled', 'Company connector disabled', 403);

@@ -18,6 +18,9 @@ export default defineConfig({
       config: true,
       miniflare: {
         bindings: {
+          ARGOS_ALLOW_DIRECT_SERVER_CUSTODY: '1',
+          ARGOS_MANAGED_PORTAL_DOMAIN: '',
+          ARGOS_PROVISIONED_PORTALS_JSON: '{}',
           ARGOS_DEPLOYMENT: 'company-cloudflare',
           ARGOS_TENANTS_JSON: JSON.stringify(tenants),
           ARGOS_SERVER_CUSTODY: '1',
