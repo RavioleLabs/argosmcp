@@ -63,3 +63,13 @@ For ZAP, run tsx scripts/security-fixture.ts and mount only .data/security-audit
 105 backend tests, 18 Cloudflare runtime tests and 6 private dashboard tests passed (129 total), plus native environment-injection and signed-resource tampering checks. Final ZAP rescan: 119 rules passed, no FAIL-class findings and two remaining warning categories, the documented public OAuth metadata CORS and fixture-only root 503. The missing resource-policy warning is resolved. Test servers and scanner containers were stopped.
 
 Final staged Gitleaks initially flagged ordinary prose about signing in this report as a generic API key. The text contained no secret; it was reworded and rescanned without adding an exclusion. Native ZIP SHA-256: ee961430ed2839daab7445595995d1989958e37b77ea69d2fc41b5063ef862f4.
+
+## Publication and live verification
+
+- Backend source: 0a7d5e3; draft PR https://github.com/RavioleLabs/argosmcp/pull/3.
+- Private dashboard/native source: ce1109b; draft PR https://github.com/RavioleLabs/argos-dashboard/pull/3.
+- Personal 0.1.4 build 5: https://github.com/RavioleLabs/argosmcp/releases/tag/personal-v0.1.4-preview.1. Uploaded ZIP size: 64,210,085 bytes. Signature verification passed locally; this remains an unnotarized ad-hoc preview.
+- Dashboard release a59bcfcf3be9de6e, Worker 55bd6bb1-eb08-47d7-ba14-c21298e6efba.
+- Backend Worker 67e25be4-8e8a-4984-9e83-5cb240488688 at https://argosmcp.leraviole.workers.dev.
+- Live read-only checks passed for health, anonymous session, public OAuth discovery, pinned dashboard HTML and the JavaScript containing the 0.1.4 download link. Missing publisher assets return 404 with no-store. Public metadata stays anonymous/cross-origin; private API resources are same-origin.
+- Native update is published, not installed over the user's existing application. Existing accounts, paired devices and real provider tokens were not changed by the test campaign.
